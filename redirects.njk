@@ -1,0 +1,20 @@
+---
+pagination:
+  data: collections.postsWithSlugs
+  size: 1
+  alias: redir
+permalink: "/r/{{ redir.data.slug }}/index.html"
+layout: null
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url={{ redir.url }}">
+  <link rel="canonical" href="{{ redir.url }}">
+  <title>Redirecting...</title>
+</head>
+<body>
+  <p>Redirecting to <a href="{{ redir.url }}">{{ redir.url }}</a>...</p>
+</body>
+</html>

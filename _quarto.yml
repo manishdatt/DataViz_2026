@@ -1,0 +1,7 @@
+project:
+  type: default
+  output-dir: quarto_output
+  render:
+   - "quarto_input/"
+    
+format: hugo-md

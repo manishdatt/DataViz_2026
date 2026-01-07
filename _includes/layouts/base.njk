@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }}</title>
+<link rel="stylesheet" href="/css/tailwind.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
+<meta name="view-transition" content="same-origin" />
+</head>
+<body class="bg-gray-100 font-sans antialiased text-gray-900">
+  {% include "header.njk" %}
+  
+  <main>
+    {% if '/posts/' in page.url %}
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+      <article class="max-w-none">
+
+      {# --- SECTION START --- #}
+        <div class="hero bg-stone-300 p-6 mb-8 rounded-lg shadow-md flex flex-col items-start space-y-4">
+          <h1 class="text-4xl font-bold mb-0 mt-0" style="view-transition-name: title-{{ page.fileSlug }};"> 
+            {{ title }}
+          </h1>
+          <p class="text-xl mt-1 mb-1">{{ description }}</p>
+          <p class="text-sm mt-1 mb-0 font-medium">By {{ author if author else "Anonymous" }}</p>
+        </div>
+        {# --- SECTION END --- #}
+
+        <div class="prose prose-lg max-w-4xl mx-auto">
+          {{ content | safe }}
+        </div>
+      </article>
+    </div>
+    {% else %}
+        <div class="prose prose-lg max-w-4xl mx-auto px-4 py-8">
+          {{ content | safe }}
+        </div>
+
+    {% endif %}
+  </main>
+  
+  {% include "footer.njk" %}
+
+  <button id="back-to-top" class="fixed bottom-4 right-4 bg-purple-600/50 text-white p-3 rounded-full shadow-lg hover:bg-purple-600 transition-colors hidden z-50" onclick="window.scrollTo({top: 0, behavior: 'smooth'});">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+    </svg>
+  </button>
+
+  <script>
+    window.addEventListener('scroll', function() {
+      const button = document.getElementById('back-to-top');
+      if (window.scrollY > 300) {
+        button.classList.remove('hidden');
+      } else {
+        button.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

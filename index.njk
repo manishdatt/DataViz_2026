@@ -1,0 +1,59 @@
+---
+layout: layouts/base.njk
+title: Data Visualization - Manish Datt
+tags: ["blog"]
+pagination:
+  data: collections.posts
+  size: 20
+  alias: posts
+---
+
+
+  <h1 class="text-4xl font-semibold mb-8 text-gray-800 pt-8">
+    Visualization of various datasets using Python, R and Observable Plot
+  </h1>
+
+  <div class="grid gap-10">
+
+    {% for post in posts %}
+      <a href="{{ post.url }}" class="no-underline flex flex-col items-center bg-neutral-primary-soft p-6 md:p-2 rounded-base shadow-md md:flex-row hover:shadow-lg transition duration-300 hover:transform hover:-translate-y-1">
+        {% if post.data.image %}
+        {% set baseFilesFolder = post.fileSlug ~ "_files" %}
+          <img class="object-cover w-full rounded-base h-64 md:h-auto md:w-1/2 mb-4 md:mb-0 md:hover:scale-150 transition duration-300" src="{{ post.url }}{{ post.data.image }}" alt="{{ post.data.title }}">
+        {% else %}
+          <img class="object-cover w-full rounded-base h-64 md:h-auto md:w-48 mb-4 md:mb-0" src="/assets/default-post-image.png" alt="Default post image">
+        {% endif %}
+        <div class="flex flex-col justify-between md:p-4 leading-normal">
+          <h5 class="mb-2 text-2xl font-bold tracking-tight text-heading" style="view-transition-name: title-{{ post.fileSlug }};">{{ post.data.title }}</h5>
+          <p class="text-sm text-gray-500 mb-1">{{ post.date | date("yyyy-MM-dd") }}</p>
+          <p class="mb-6 text-body">{{ post.data.description }}</p>
+          <div>
+            <button type="button" class="inline-flex items-center w-auto text-body bg-neutral-secondary-medium box-border border border-default-medium hover:bg-neutral-tertiary-medium hover:text-heading focus:ring-4 focus:ring-neutral-tertiary shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none">
+              Read more
+              <svg class="w-4 h-4 ms-1.5 rtl:rotate-180 -me-0.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m14 0-4 4m4-4-4-4"/></svg>
+            </button>
+          </div>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+
+  <div class="text-center mt-8 flex justify-center space-x-4">
+    {% if pagination.href.previous %}
+      <a href="{{ pagination.href.previous }}" class="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        Previous Page
+      </a>
+    {% endif %}
+    {% if pagination.href.next %}
+      <a href="{{ pagination.href.next }}" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        Next Page
+        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </a>
+    {% endif %}
+  </div>
+
