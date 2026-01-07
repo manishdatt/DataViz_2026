@@ -21,8 +21,6 @@ export default function (eleventyConfig) {
 
   // FIXED SHORTCODE
   eleventyConfig.addPairedShortcode("demo", function(content) {
-    // 1. "content" is the raw HTML/JS you wrote in your file.
-    // 2. We escape it so it can safely sit inside a <code> block without executing.
     const highlightedCode = md.options.highlight(content, "html");
 
     return `
@@ -55,6 +53,14 @@ export default function (eleventyConfig) {
   // Passthrough
   eleventyConfig.addPassthroughCopy({"posts/**/*.{png,jpg,jpeg,gif,svg,csv}": ""});
   eleventyConfig.addPassthroughCopy({"assets/**/*.{png,jpg,jpeg,gif,svg}": ""});
+
+  // Transform to add classes to all pre tags
+  eleventyConfig.addTransform("addPreClasses", function(content) {
+    if (this.outputPath && this.outputPath.endsWith(".html")) {
+      return content.replace(/<pre/g, '<pre class="not-prose bg-stone-200 overflow-x-auto w-full"');
+    }
+    return content;
+  });
 
   return {
     dir: { input: ".", output: "_site", includes: "_includes" },
