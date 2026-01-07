@@ -19,7 +19,7 @@ slug: 25B4
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
-# TidyTuesday dataset of [2025-11-25](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-11-25)
+## TidyTuesday dataset of [2025-11-25](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-11-25)
 
 ``` python
 import pandas as pd

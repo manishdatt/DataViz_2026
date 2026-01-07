@@ -16,7 +16,7 @@ description: Gini coefficient for different countries before and after taxes.
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
-# TidyTuesday dataset of [2025-08-05](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-08-05)
+## TidyTuesday dataset of [2025-08-05](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-08-05)
 
 ``` python
 import pandas as pd

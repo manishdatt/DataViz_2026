@@ -16,7 +16,7 @@ description: Word cloud for movie and show titles.
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
-# TidyTuesday data for [2025-07-29](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-07-29/readme.md)
+## TidyTuesday data for [2025-07-29](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-07-29/readme.md)
 
 ``` python
 import pandas as pd

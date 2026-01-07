@@ -17,7 +17,7 @@ description: Countries with maximum number of titled players.
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
-# TidyTuesday dataset of [2025-09-23](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-23)
+## TidyTuesday dataset of [2025-09-23](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-23)
 
 ``` python
 import pandas as pd

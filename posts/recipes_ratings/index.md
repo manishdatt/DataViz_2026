@@ -17,7 +17,7 @@ description: Five star cuisines in 10 minutes.
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
-# TidyTuesday dataset of [2025-09-16](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-16)
+## TidyTuesday dataset of [2025-09-16](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-16)
 
 ``` python
 import pandas as pd

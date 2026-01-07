@@ -16,7 +16,7 @@ description: Timeline for the global Measles and Rubella cases.
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
-# TidyTuesday data for [2025-06-24](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-06-24/readme.md)
+## TidyTuesday data for [2025-06-24](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-06-24/readme.md)
 
 ``` python
 import pandas as pd

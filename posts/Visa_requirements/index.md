@@ -12,7 +12,7 @@ description: A shiny app for visa information.
 ---
 
 
-# TidyTuesday dataset of [2025-09-09](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-09)
+## TidyTuesday dataset of [2025-09-09](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-09)
 
 The shiny app is available [here](https://baxsak-manish-datt.shinyapps.io/visa-new/).
 
