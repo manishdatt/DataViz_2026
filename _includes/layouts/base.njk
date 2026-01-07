@@ -4,10 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ title }}</title>
-<link rel="stylesheet" href="/css/tailwind.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
-<meta name="view-transition" content="same-origin" />
+  <link rel="stylesheet" href="/css/tailwind.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
+  <link href="https://unpkg.com/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+  
+  <script src="https://unpkg.com/gridjs/dist/gridjs.umd.js"></script>
+  <meta name="view-transition" content="same-origin" />
+
+  <style>
+    /* Force Grid.js headers and cells to stay on one line to trigger the scroll */
+    .gridjs-td, .gridjs-th {
+      white-space: nowrap;
+    }
+    /* Custom scrollbar styling for a cleaner look */
+    .gridjs-wrapper::-webkit-scrollbar {
+      height: 8px;
+    }
+    .gridjs-wrapper::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    .gridjs-wrapper::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+  </style>
 </head>
+
 <body class="bg-gray-100 font-sans antialiased text-gray-900">
   {% include "header.njk" %}
   
@@ -15,8 +37,7 @@
     {% if '/posts/' in page.url %}
     <div class="container mx-auto px-4 py-8 max-w-4xl">
       <article class="max-w-none">
-
-      {# --- SECTION START --- #}
+        
         <div class="hero bg-stone-300 p-6 mb-8 rounded-lg shadow-md flex flex-col items-start space-y-4">
           <h1 class="text-4xl font-bold mb-0 mt-0" style="view-transition-name: title-{{ page.fileSlug }};"> 
             {{ title }}
@@ -24,7 +45,6 @@
           <p class="text-xl mt-1 mb-1">{{ description }}</p>
           <p class="text-sm mt-1 mb-0 font-medium">By {{ author if author else "Anonymous" }}</p>
         </div>
-        {# --- SECTION END --- #}
 
         <div class="prose prose-lg max-w-4xl mx-auto">
           {{ content | safe }}
@@ -35,7 +55,6 @@
         <div class="prose prose-lg max-w-4xl mx-auto px-4 py-8">
           {{ content | safe }}
         </div>
-
     {% endif %}
   </main>
   
@@ -55,6 +74,39 @@
       } else {
         button.classList.add('hidden');
       }
+    });
+  </script>
+
+  <script>
+    document.querySelectorAll(".prose table").forEach((tableEl) => {
+      // 1. Create a wrapper with overflow-x-auto to ensure scroll works
+      const wrapper = document.createElement("div");
+      wrapper.classList.add("my-8", "gridjs-container", "w-full", "overflow-x-auto");
+      tableEl.parentNode.insertBefore(wrapper, tableEl);
+
+      new gridjs.Grid({
+        from: tableEl,
+        width: '100%',     // 2. Explicitly tell Grid.js to fill the container
+        sort: true,
+        search: true,
+        resizable: true,   // Allows users to drag column widths
+        pagination: {
+          limit: 10
+        },
+        style: {
+          table: {
+            'font-family': '"Inter", sans-serif',
+            'font-size': '14px'
+          },
+          th: {
+            'background-color': '#f9fafb',
+            'color': '#374151'
+          }
+        }
+      }).render(wrapper);
+
+      // Hide the original raw Markdown table
+      tableEl.style.display = 'none';
     });
   </script>
 </body>
