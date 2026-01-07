@@ -48,6 +48,10 @@ export default function (eleventyConfig) {
     return collectionApi.getFilteredByTag("posts").sort((a, b) => b.date - a.date);
   });
 
+  eleventyConfig.addCollection("postsWithSlugs", function(collectionApi) {
+    return collectionApi.getAll().filter(item => item.data.slug);
+  });
+
   eleventyConfig.setLibrary("md", md);
 
   // Passthrough
