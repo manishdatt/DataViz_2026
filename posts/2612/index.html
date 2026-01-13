@@ -1,0 +1,177 @@
+---
+title: The Languages of Africa
+author: Manish Datt
+date: '2026-01-13'
+iso-date: '2026-01-13'
+description: Distribution of African language families based on the number of countries where they are spoken.
+image: Africa_languages.png
+categories:
+  - ObservablePlot
+  - TidyTuesday
+slug: 2612
+---
+
+<h2>TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<!-- Import Tailwind CSS, Tabulator, D3.js, and Observable Plot -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.11/dist/plot.umd.min.js"></script>
+
+<div class="container mx-auto">
+        <h1 class="text-2xl font-bold mb-4">Africa Languages</h1>
+        <div id="table" class="bg-white shadow-md rounded-lg overflow-hidden"></div>
+        <div id="summary" class="mt-4 p-4 bg-gray-200 rounded"></div>
+        <div id="chart2" class="mt-4 mb-4"></div>
+    </div>
+
+    <!-- Tabulator JS -->
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+    <script>
+        // Load CSV data using D3
+        d3.csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-01-13/africa.csv').then(data => {
+            // Rename "Afroasiatic" to "Afro-Asiatic" in family column
+            data.forEach(d => {
+                if (d.family === "Afroasiatic") d.family = "Afro-Asiatic";
+            });
+            // Initialize Tabulator table
+            new Tabulator("#table", {
+                data: data,
+                layout: "fitColumns",
+                columns: [
+                    {title: "Language", field: "language"},
+                    {title: "Family", field: "family"},
+                    {title: "Native Speakers", field: "native_speakers"},
+                    {title: "Country", field: "country"}
+                ],
+                cssClass: "table-auto w-full",
+                headerSort: true,
+                pagination: "local",
+                paginationSize: 10,
+            });
+
+            // Calculate unique entries
+            const uniqueLanguage = new Set(data.map(d => d.language)).size;
+            const uniqueFamily = new Set(data.map(d => d.family)).size;
+            const uniqueSpeakers = new Set(data.map(d => d.native_speakers)).size;
+            const uniqueCountry = new Set(data.map(d => d.country)).size;
+
+            // Display summary
+            document.getElementById('summary').innerHTML = `
+                <h2 class="text-lg font-semibold mb-2">Summary</h2>
+                <p>Unique Languages: ${uniqueLanguage}</p>
+                <p>Unique Families: ${uniqueFamily}</p>
+                <p>Unique Countries: ${uniqueCountry}</p>
+            `;
+
+
+            // Second chart: families by unique countries
+            const grouped2 = d3.rollup(data, v => ({
+                uniqueCountries: new Set(v.map(d => d.country)).size,
+                totalSpeakers: d3.sum(v, d => +d.native_speakers),
+                uniqueLanguages: new Set(v.map(d => d.language)).size
+            }), d => d.family);
+            const top20_2 = Array.from(grouped2).map(([family, stats]) => ({family, ...stats})).sort((a, b) => b.uniqueCountries - a.uniqueCountries).slice(0, 20);
+
+            const plot = Plot.plot({
+                marks: [
+                    Plot.dot(top20_2, {
+                        x: "uniqueCountries",
+                        y: "family",
+                        r: d => Math.sqrt(d.uniqueLanguages) * 2,
+                        fill: "totalSpeakers",
+                        fillOpacity: 0.7
+                    }),
+                ],
+                x: {label: "Number of Countries"},
+                y: {label: "", domain: top20_2.map(d => d.family), tickSize: 0},
+                color: {
+                    legend: true,
+                    label: "Sum of Native Speakers",
+                    tickFormat: d => (d / 1000000000).toFixed(1) + "B",
+                    labelAnchor: "bottom",
+                    position: "bottom"
+                },
+                r: {legend: true, label: "Number of Unique Languages"},
+                marginLeft: 100,
+                marginBottom: 40,
+                style: {
+                    fontSize: "14px",
+                    background: "#f3f4f6"
+                }
+            });
+            document.querySelector("#chart2").appendChild(plot);
+
+            // Add annotations on the chart
+            const svgEl = document.querySelector("#chart2 svg");
+            const g = svgEl.querySelector("g");
+            d3.select(g).append("foreignObject")
+                .attr("x", 220)
+                .attr("y", 200)
+                .attr("width", 400)
+                .attr("height", 130)
+                .append("xhtml:div")
+                .attr("class", "bg-gradient-to-r from-gray-100 to-gray-100 via-gray-200 text-center text-gray-700 p-2 rounded")
+                .style("text-align", "left")
+                .style("font-size", "16px")
+                .text("Distribution of African language families based on the number of countries where they are spoken. The size of the circles represents the number of unique languages in each family, while the color indicates the total number of native speakers.");
+            const nigerIndex = top20_2.findIndex(d => d.family === "Niger–Congo");
+            const afroIndex = top20_2.findIndex(d => d.family === "Afro-Asiatic");
+            const bandHeight = 600 / 20; // 30
+            const niger = top20_2[nigerIndex];
+            const afro = top20_2[afroIndex];
+            
+            // Add foreignObject for Niger-Congo
+            if (niger) {
+                const x = (niger.uniqueCountries / d3.max(top20_2, d => d.uniqueCountries)) * 800;
+                const y = (nigerIndex * bandHeight) + bandHeight / 2;
+                d3.select(g).append("foreignObject")
+                    .attr("x", x - 350)
+                    .attr("y", y - 15)
+                    .attr("width", 150)
+                    .attr("height", 60)
+                    .append("xhtml:div")
+                    .attr("class", "bg-white bg-opacity-60 p-2 rounded-xl shadow text-sm")
+                    .style("color", "#99CC00")
+                    .html(`Languages: ${niger.uniqueLanguages}<br>Native speakers: ${(niger.totalSpeakers / 1000000000).toFixed(1)}B`);
+            }
+            
+            // Add foreignObject for Afro-Asiatic
+            if (afro) {
+                const x = (afro.uniqueCountries / d3.max(top20_2, d => d.uniqueCountries)) * 800;
+                const y = (afroIndex * bandHeight) + bandHeight / 2;
+                d3.select(g).append("foreignObject")
+                    .attr("x", x - 30)
+                    .attr("y", y + 30)
+                    .attr("width", 150)
+                    .attr("height", 60)
+                    .append("xhtml:div")
+                    .attr("class", "bg-white bg-opacity-60 p-2 rounded-xl shadow text-sm")
+                    .style("color", "brown")
+                    .html(`Languages: ${afro.uniqueLanguages}<br>Native speakers: ${(afro.totalSpeakers / 1000000000).toFixed(1)}B`);
+            }
+            // Add download CSV button functionality
+            document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+                const csvContent = "data:text/csv;charset=utf-8," + data.map(d => `${d.language},${d.family},${d.native_speakers},${d.country}`).join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "africa_languages.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        }).catch(error => console.error('Error loading CSV:', error));
+
+    </script>
+
+    <style>
+        .plot-d6a7b5-ramp {
+            background-color: #f3f4f6;
+            }
+    </style>
+
+{% enddemo %}
