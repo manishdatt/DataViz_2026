@@ -1,0 +1,228 @@
+---
+title: Astronomy Picture of the Day (APOD) Archive
+author: Manish Datt
+date: '2026-01-20'
+iso-date: '2026-01-20'
+description: Dashboard to explore the APOD dataset.
+image: SunVenusUv3_SdoDove_960.jpg
+categories:
+  - Dashboards
+  - TidyTuesday
+slug: 2613
+layout: false
+---
+<html>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
+
+<!-- Tabulator JS -->
+<script type="text/javascript" src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+<!-- PapaParse JS -->
+<script src="https://unpkg.com/papaparse@5/papaparse.min.js"></script>
+
+<body class="p-4">
+<h1 class="text-4xl font-bold mb-4">{{ title }}</h1>
+<h2 class="text-2xl mb-4 p-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}"><u>{{ date }}</u></a></h2>
+
+<div class="mt-4 p-4 bg-gray-100 rounded-lg">
+  <div class="flex space-x-4 mb-4">
+    <div class="w-32">
+      <button id="random-btn" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 w-full">Surprise Me</button>
+    </div>
+    <div class="w-48">
+      <input type="date" id="date-picker" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+    </div>
+    <div class="flex-1">
+      <input type="text" id="search-input" placeholder="Search title for Sun, milky way, hubble, etc..." class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+      <div id="search-results" class="mt-2 max-h-40 overflow-y-auto border border-gray-300 rounded hidden"></div>
+    </div>
+  </div>
+
+  <div class="md:flex md:space-x-4">
+    <div class="md:w-1/2 mb-4 md:mb-0">
+      <label class="block text-sm font-medium text-gray-700 mb-2">About the image</label>
+      <p id="explanation-display" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-700"></p>
+      <div id="copyright-info" class="mt-2 text-sm text-gray-600"></div>
+    </div>
+    <div class="md:w-1/2">
+      <div id="media-container" class="flex items-center justify-center relative">
+        <!-- Image or text will be displayed here -->
+      </div>
+    </div>
+  </div>
+  <div id="media-buttons" class="mt-4 space-x-2 hidden flex justify-end">
+    <button id="download-btn" class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600">Download</button>
+    <button id="download-hd-btn" class="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600">HD</button>
+  </div>
+</div>
+
+</body>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let apodData = [];
+
+ 
+
+    let sortedData = [];
+    fetch('apod.csv')
+        .then(response => response.text())
+        .then(csv => {
+            apodData = Papa.parse(csv, {header: true}).data;
+            sortedData = [...apodData].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+            // 2. Create the Table Div FIRST
+            const tableContainer = document.createElement('div');
+            tableContainer.id = "apod-table";
+            tableContainer.className = "mt-8";
+            document.querySelector('.mt-4.p-4.bg-gray-100.rounded-lg').insertAdjacentElement('afterend', tableContainer);
+
+            // 3. Initialize Tabulator NOW that the div exists
+            var table = new Tabulator("#apod-table", {
+                data: apodData, // Set data immediately
+                autoColumns: true,
+                layout: "fitColumns",
+                pagination: "local",
+                paginationSize: 10,
+                selectable: true,
+                rowSelected: function(row){
+                    const data = row.getData();
+                    document.getElementById('date-picker').value = data.date;
+                    document.getElementById('date-picker').dispatchEvent(new Event('change'));
+                }
+            });
+
+            // 4. Setup Search and Initial Date (rest of your existing logic)
+            document.getElementById('search-input').addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const resultsDiv = document.getElementById('search-results');
+                if (searchTerm.length === 0) {
+                    resultsDiv.classList.add('hidden');
+                    resultsDiv.innerHTML = '';
+                    return;
+                }
+                resultsDiv.classList.remove('hidden');
+                const filtered = apodData.filter(row => row.title && row.title.toLowerCase().includes(searchTerm));
+                if (filtered.length === 0) {
+                    resultsDiv.innerHTML = '<div class="p-2 text-gray-500">No results found</div>';
+                } else {
+                    resultsDiv.innerHTML = filtered.map(row =>
+                        `<div class="p-2 cursor-pointer hover:bg-gray-100" data-date="${row.date}">${row.title}</div>`
+                    ).join('');
+                    resultsDiv.querySelectorAll('div[data-date]').forEach(div => {
+                        div.addEventListener('click', function() {
+                            const date = this.getAttribute('data-date');
+                            document.getElementById('date-picker').value = date;
+                            document.getElementById('date-picker').dispatchEvent(new Event('change'));
+                            document.getElementById('search-input').value = '';
+                            document.getElementById('search-results').classList.add('hidden');
+                            document.getElementById('search-results').innerHTML = '';
+                        });
+                    });
+                }
+            });
+
+            // Select random date
+            if (apodData.length > 0) {
+                const randomIndex = Math.floor(Math.random() * apodData.length);
+                const randomRow = apodData[randomIndex];
+                document.getElementById('date-picker').value = randomRow.date;
+            }
+
+            // Trigger change to display initial media
+            document.getElementById('date-picker').dispatchEvent(new Event('change'));
+        })
+        .catch(error => console.error('Error loading CSV:', error));
+
+    // Random button event
+    document.getElementById('random-btn').addEventListener('click', function() {
+        if (apodData.length > 0) {
+            const randomIndex = Math.floor(Math.random() * apodData.length);
+            const randomRow = apodData[randomIndex];
+            document.getElementById('date-picker').value = randomRow.date;
+            document.getElementById('date-picker').dispatchEvent(new Event('change'));
+        }
+    });
+
+    // Date picker change event
+    document.getElementById('date-picker').addEventListener('change', function() {
+        const selectedDate = this.value;
+        const row = apodData.find(r => r.date === selectedDate);
+        if (row) {
+            const copyrightText = row.copyright ? `<br><strong>Copyright:</strong> ${row.copyright}` : '';
+            document.getElementById('explanation-display').innerHTML = `<strong>${row.title}</strong><br>${row.explanation || 'No explanation available'}${copyrightText}`;
+            const container = document.getElementById('media-container');
+            const buttonsDiv = document.getElementById('media-buttons');
+            const copyrightDiv = document.getElementById('copyright-info');
+
+            const currentIndex = sortedData.findIndex(r => r.date === selectedDate);
+            const hasPrev = currentIndex > 0;
+            const hasNext = currentIndex < sortedData.length - 1;
+
+            const prevBtn = hasPrev ? `<button id="prev-btn" class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-50 text-black p-1 rounded-full hover:bg-opacity-75">&larr;</button>` : '';
+            const nextBtn = hasNext ? `<button id="next-btn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-50 text-white p-1 rounded-full hover:bg-opacity-75">&rarr;</button>` : '';
+
+            if (row.media_type === 'image') {
+                container.innerHTML = `${prevBtn}<img src="${row.url}" alt="APOD Image" class="max-w-full h-auto rounded-md">${nextBtn}`;
+                buttonsDiv.classList.remove('hidden');
+
+                // Set up download buttons
+                document.getElementById('download-btn').onclick = function() {
+                    window.open(row.url, '_blank');
+                };
+
+                const hdBtn = document.getElementById('download-hd-btn');
+                if (row.hdurl && row.hdurl !== 'NA') {
+                    hdBtn.onclick = function() {
+                        window.open(row.hdurl, '_blank');
+                    };
+                    hdBtn.disabled = false;
+                    hdBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    hdBtn.disabled = true;
+                    hdBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+
+                // Copyright is now included in explanation-display
+                copyrightDiv.innerHTML = '';
+            } else if (row.media_type === 'video') {
+                container.innerHTML = `${prevBtn}<iframe width="100%" height="315" src="${row.url}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>${nextBtn}`;
+                buttonsDiv.classList.add('hidden');
+                // Copyright is now included in explanation-display
+                copyrightDiv.innerHTML = '';
+            } else {
+                container.innerHTML = `${prevBtn}<p class="text-gray-700">The media type is ${row.media_type}</p>${nextBtn}`;
+                buttonsDiv.classList.add('hidden');
+                copyrightDiv.innerHTML = '';
+            }
+
+            // Add navigation event listeners
+            if (hasPrev) {
+                document.getElementById('prev-btn').addEventListener('click', function() {
+                    const prevRow = sortedData[currentIndex - 1];
+                    document.getElementById('date-picker').value = prevRow.date;
+                    document.getElementById('date-picker').dispatchEvent(new Event('change'));
+                });
+            }
+            if (hasNext) {
+                document.getElementById('next-btn').addEventListener('click', function() {
+                    const nextRow = sortedData[currentIndex + 1];
+                    document.getElementById('date-picker').value = nextRow.date;
+                    document.getElementById('date-picker').dispatchEvent(new Event('change'));
+                });
+            }
+        } else {
+            document.getElementById('explanation-display').innerHTML = '<strong>No data available for this date</strong>';
+            document.getElementById('media-container').innerHTML = '<p class="text-gray-700">No media available</p>';
+            document.getElementById('media-buttons').classList.add('hidden');
+            document.getElementById('copyright-info').innerHTML = '';
+        }
+    });
+
+    // Table is now created inside the fetch
+});
+</script>
+
+</html>
