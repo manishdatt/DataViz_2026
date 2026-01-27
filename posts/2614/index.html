@@ -1,0 +1,333 @@
+---
+title: Brazilian Companies
+author: Manish Datt
+date: '2026-01-27'
+description: Brazilian Companies data.
+image: Brazilian_Companies.png
+categories:
+  - ObservablePlot
+  - TidyTuesday
+slug: 2614
+---
+
+<h2 class="text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<!-- Import Tailwind CSS, Tabulator, D3.js, and Observable Plot -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.11/dist/plot.umd.min.js"></script>
+
+    <style>
+        .tabulator {
+            font-size: 14px;
+        }
+        .tabulator .tabulator-header {
+            font-weight: bold;
+        }
+        #swarmplot text {
+            font-size: 14px;
+        }
+        #swarmplot {
+            position: relative;
+            overflow: hidden;
+        }
+        #llc-histogram-inset {
+            position: absolute;
+            bottom: 10%;
+            right: 21%;
+            background: transparent;
+            padding: 0px;
+            z-index: 10;
+            max-width: 400px;
+            border: 0;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+
+
+<div class="space-y-8">
+    <!-- Companies Table -->
+    <div>
+        <h3 class="text-2xl font-bold mb-4">Companies</h3>
+        <div id="companies-table"></div>
+    </div>
+
+    <!-- Legal Nature, Qualifications, and Size Tables in one row -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Legal Nature Table -->
+        <div>
+            <h3 class="text-xl font-bold mb-4">Legal Nature</h3>
+            <div id="legal-nature-table"></div>
+        </div>
+
+        <!-- Qualifications Table -->
+        <div>
+            <h3 class="text-xl font-bold mb-4">Qualifications</h3>
+            <div id="qualifications-table"></div>
+        </div>
+
+        <!-- Size Table -->
+        <div>
+            <h3 class="text-xl font-bold mb-4">Size</h3>
+            <div id="size-table"></div>
+        </div>
+    </div>
+
+        <!-- Swarmplot -->
+    <div>
+        <h3 class="text-2xl px-8 font-medium max-w-5xl font-serif">Distribution of Brazilian Companies by Legal Nature and Capital Stock
+            for <span class="text-[#0C8EF4]">Micro-enterprises</span>, <span class="text-[#D3045D]">Small-enterprises</span>, and <span class="text-[#A162A1]">Others</span>.
+        Inset shows histogram for LLCs.</h3>
+        <div id="swarmplot" class="relative"></div>
+    </div>
+    <div></div>
+</div>
+
+<script>
+    // Fetch and create tables for each CSV file
+    const companiesUrl = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-01-27/companies.csv';
+    const legalNatureUrl = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-01-27/legal_nature.csv';
+    const qualificationsUrl = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-01-27/qualifications.csv';
+    const sizeUrl = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-01-27/size.csv';
+
+    // Function to create a Tabulator table
+    function createTable(elementId, data) {
+        new Tabulator("#" + elementId, {
+            data: data,
+            layout: "fitColumns",
+            pagination: "local",
+            paginationSize: 10,
+            paginationSizeSelector: [10, 25, 50, 100],
+            movableColumns: true,
+            resizableRows: true,
+            height: "400px",
+            autoColumns: true,
+        });
+    }
+
+    // Fetch and create Companies table and swarmplot
+    d3.csv(companiesUrl).then(function(data) {
+        createTable("companies-table", data);
+
+        // Debug: log first row to see column names
+        console.log("First row of data:", data[0]);
+        console.log("Column names:", Object.keys(data[0]));
+
+        // Parse capital_stock as numbers and filter out invalid data
+        const parsedData = data
+            .filter(d => d.company_size && d.capital_stock && d.legal_nature)
+            .map(d => ({
+                ...d,
+                capital_stock: parseFloat(d.capital_stock)
+            }))
+            .filter(d => !isNaN(d.capital_stock));
+
+        console.log("Parsed data count:", parsedData.length);
+        console.log("Sample parsed data:", parsedData.slice(0, 5));
+
+        // Count companies by legal nature and sort by count (descending)
+        const legalNatureCounts = d3.rollup(parsedData, v => v.length, d => d.legal_nature);
+        const sortedLegalNatures = Array.from(legalNatureCounts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(d => d[0]);
+
+        console.log("Legal nature counts:", legalNatureCounts);
+        console.log("Sorted legal natures:", sortedLegalNatures);
+
+        // Get unique company sizes for color domain
+        const uniqueCompanySizes = [...new Set(parsedData.map(d => d.company_size))];
+        console.log("Unique company sizes:", uniqueCompanySizes);
+
+        const categories = [
+            { label: "micro-enterprise", color: "#0C8EF4" },
+            { label: "small-enterprise", color: "#D3045D" },
+            { label: "other", color: "#A162A1" }
+            ];
+            
+        // Filter for LLC companies (top legal nature)
+        const topLegalNature = sortedLegalNatures[0];
+        const llcData = parsedData.filter(d => d.legal_nature && d.legal_nature.includes(topLegalNature));
+        
+        // Filter valid capital_stock values
+        const validLLCData = llcData.filter(d => d.capital_stock > 0);
+        
+        console.log("LLC data:", validLLCData.length);
+        
+        // Create log-spaced bins manually
+        const minVal = d3.min(validLLCData, d => d.capital_stock);
+        const maxVal = d3.max(validLLCData, d => d.capital_stock);
+        const logMin = Math.log10(minVal);
+        const logMax = Math.log10(maxVal);
+        const numBins = 30;
+        const binWidth = (logMax - logMin) / numBins;
+        
+        // Create bin edges
+        const binEdges = [];
+        for (let i = 0; i <= numBins; i++) {
+            binEdges.push(Math.pow(10, logMin + i * binWidth));
+        }
+        
+        // Assign data to bins
+        const bins = new Array(numBins).fill(0);
+        validLLCData.forEach(d => {
+            const logVal = Math.log10(d.capital_stock);
+            const binIndex = Math.min(numBins - 1, Math.floor((logVal - logMin) / binWidth));
+            if (binIndex >= 0 && binIndex < numBins) {
+                bins[binIndex]++;
+            }
+        });
+        
+        // Create bin data for plotting
+        const binData = binEdges.slice(0, -1).map((x0, i) => ({
+            x0: x0,
+            x1: binEdges[i + 1],
+            length: bins[i]
+        }));
+        
+        // Create smaller histogram for inset
+        const insetHistogram = Plot.plot({
+            width: 350,
+            height: 200,
+            marginTop: 0,
+            marginRight: 0,
+            marginBottom: 30,
+            marginLeft: 40,
+            background: "none",
+            style:{ background: "transparent" },
+            x: {
+                label: "",
+                type: "log",
+                tickFormat: d => {
+                    if (d >= 1e9) return (d / 1e9).toLocaleString("en-US", {maximumFractionDigits: 0}) + "B";
+                    return (d / 1e6).toLocaleString("en-US", {maximumFractionDigits: 0}) + "M";
+                },
+                ticks: 3,
+                labelArrow: null,
+            },
+            y: {
+                label: "",
+                grid: false,
+                ticks: 3,
+                tickFormat: d => (d / 1e3).toFixed(0) + "K",
+                labelArrow: null,
+                color: "#666666"
+            },
+            marks: [
+                Plot.rectY(binData, {
+                    x1: d => d.x0,
+                    x2: d => d.x1,
+                    y: d => d.length,
+                    fill: "lightgreen",
+                    opacity: 1
+                }),
+                Plot.ruleY([0]),
+                Plot.axisX({
+                    color: "#666666",
+                    labelArrow: null,
+                    tickFormat: d => {
+                        if (d >= 1e12) return (d / 1e12).toLocaleString("en-US", {maximumFractionDigits: 0}) + "T";
+                        if (d >= 1e9) return (d / 1e9).toLocaleString("en-US", {maximumFractionDigits: 0}) + "B";
+                        return (d / 1e6).toLocaleString("en-US", {maximumFractionDigits: 0}) + "M";
+                    }
+                }),
+                Plot.axisY({
+                    color: "#666666",
+                    tickFormat: d => (d / 1e3).toFixed(0) + "K",
+                    labelArrow: null
+                })
+            ]
+        });
+        
+        // Create swarmplot with histogram as a mark inside the SVG
+        const swarmplot = Plot.plot({
+            width: 1000,
+            height: 600,
+            marginLeft: 310,
+            marginBottom: 50,
+            marginRight: 50,
+            color: {
+                legend: false,
+                domain: categories.map(d => d.label),
+                range: categories.map(d => d.color)
+            },
+            x: {
+                label: "Capital Stock (10M BRL \u2248 2M USD)",
+                labelAnchor: "center",
+                type: "log",
+                tickFormat: d => {
+                    if (d >= 1e12) return (d / 1e12).toLocaleString("en-US", {maximumFractionDigits: 0}) + "T";
+                    if (d >= 1e9) return (d / 1e9).toLocaleString("en-US", {maximumFractionDigits: 0}) + "B";
+                    return (d / 1e6).toLocaleString("en-US", {maximumFractionDigits: 0}) + "M";
+                },
+                ticks: 5,
+                tickSize: 0,
+                grid: true
+            },
+            y: {
+                label: "",
+                tickSize: 0,
+                labelAnchor: "center",
+                domain: sortedLegalNatures
+            },
+            marks: [
+                Plot.dot(parsedData, {
+                    x: "capital_stock",
+                    y: "legal_nature",
+                    fill: "company_size",
+                    r: 4,
+                    opacity: 0.7
+                }),
+                // Add count labels on the right for each legal nature
+                Plot.text(Array.from(legalNatureCounts.entries()), {
+                    x: d => d3.max(parsedData, p => p.capital_stock) * 1.5,
+                    y: d => d[0],
+                    text: d => d[1].toLocaleString("en-US"),
+                    textAnchor: "start",
+                    fill: "#666666",
+                    fontSize: 12
+                }),
+                // THE INSET AS A MARK
+                () => {
+                    const container = d3.create("svg:g")
+                        .attr("transform", "translate(600, 350)");
+                    container.node().append(insetHistogram);
+                    return container.node();
+                }
+            ]
+        });
+        
+        document.getElementById("swarmplot").appendChild(swarmplot);
+    });
+    
+    // Fetch and create Legal Nature table
+    d3.csv(legalNatureUrl).then(function(data) {
+        createTable("legal-nature-table", data);
+    }).catch(function(error) {
+        console.error("Error loading legal nature data:", error);
+        document.getElementById("legal-nature-table").innerHTML = "<p class='text-red-500'>Error loading data</p>";
+    });
+
+    // Fetch and create Qualifications table
+    d3.csv(qualificationsUrl).then(function(data) {
+        createTable("qualifications-table", data);
+    }).catch(function(error) {
+        console.error("Error loading qualifications data:", error);
+        document.getElementById("qualifications-table").innerHTML = "<p class='text-red-500'>Error loading data</p>";
+    });
+
+    // Fetch and create Size table
+    d3.csv(sizeUrl).then(function(data) {
+        createTable("size-table", data);
+    }).catch(function(error) {
+        console.error("Error loading size data:", error);
+        document.getElementById("size-table").innerHTML = "<p class='text-red-500'>Error loading data</p>";
+    });
+</script>
+
+{% enddemo %}
