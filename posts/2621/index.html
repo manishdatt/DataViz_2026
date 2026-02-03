@@ -1,0 +1,774 @@
+---
+title: Edible Plants Database
+author: Manish Datt
+date: '2026-02-03'
+description: Distribution of edible plants by water and sunlight requirements.
+image: Edible_plants.jpeg
+categories:
+  - ObservablePlot
+  - TidyTuesday
+slug: 2621
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<!-- Import Tailwind CSS, Tabulator, PapaParse, danfojs, and D3.js -->
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css" rel="stylesheet">
+<script src="https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/danfojs@1.1.2/lib/bundle.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<div id="edible-plants-table" class="mt-6 w-full"></div>
+
+<p class="text-sm text-gray-600 mt-2 italic">* Note: The "requirements" column has been excluded due to length constraints.</p>
+
+<!-- Summary Statistics Section -->
+<div class="mt-8">
+  <h3 class="text-2xl font-semibold mb-4 text-center">Summary Statistics</h3>
+  <div id="summary-stats" class="w-full overflow-x-auto"></div>
+</div>
+
+<!-- Visualization Section -->
+<div class="mt-8 justify-center items-center">
+  <h3 class="text-3xl font-semibold mb-4 text-center">Distribution of Edible Plants by Water and Sunlight Requirements</h3>
+  <div id="nutrient-filters" class="flex flex-wrap gap-4 justify-center pl-4"></div>
+  <div id="viz-plot" class="w-full flex justify-center"></div>
+</div>
+
+<script type="module">
+  import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
+
+  // Helper to normalize case (title case) and fix spacing around slashes
+  function toTitleCase(str) {
+    if (!str || str === 'Unknown') return 'Unknown';
+    // Remove extra spaces after slashes, then normalize case
+    const cleaned = str.replace(/\/\s+/g, '/');
+    return cleaned.toLowerCase().split(' ').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+
+  // Helper to get numeric value for sorting (Very High=4, High=3, Medium=2, Low=1, Very Low=0)
+  function getIntensityValue(str) {
+    const lower = str.toLowerCase();
+    if (lower.includes('very high')) return 4;
+    if (lower.includes('high')) return 3;
+    if (lower.includes('medium')) return 2;
+    if (lower.includes('very low')) return 0;
+    if (lower.includes('low')) return 1;
+    return -1;
+  }
+
+  // Fetch and parse CSV data from local file
+  Papa.parse('edible_plants.csv', {
+    download: true,
+    header: true,
+    dynamicTyping: true,
+    complete: function(results) {
+      // Filter out empty rows
+      const filteredData = results.data.filter(row => row.taxonomic_name && row.taxonomic_name.trim() !== '');
+      
+      // Add normalized columns
+      filteredData.forEach(row => {
+        row.water_normalized = toTitleCase(row.water);
+        row.sunlight_normalized = toTitleCase(row.sunlight);
+        row.nutrients_normalized = toTitleCase(row.nutrients);
+      });
+      
+      // Define columns based on the CSV structure (19 of 20 columns, excluding 'requirements')
+      const columns = [
+        { title: "Taxonomic Name", field: "taxonomic_name", headerFilter: "input", width: 180, formatter: function(cell) { return "<i>" + cell.getValue() + "</i>"; } },
+        { title: "Common Name", field: "common_name", headerFilter: "input", width: 150 },
+        { title: "Cultivation", field: "cultivation", headerFilter: "input", width: 100 },
+        { title: "Sunlight", field: "sunlight", headerFilter: "input", width: 120 },
+        { title: "Water", field: "water", headerFilter: "input", width: 90 },
+        { title: "pH Lower", field: "preferred_ph_lower", headerFilter: "number", hozAlign: "center", width: 80 },
+        { title: "pH Upper", field: "preferred_ph_upper", headerFilter: "number", hozAlign: "center", width: 80 },
+        { title: "Nutrients", field: "nutrients", headerFilter: "input", width: 90 },
+        { title: "Soil", field: "soil", headerFilter: "input", width: 130 },
+        { title: "Season", field: "season", headerFilter: "input", width: 100 },
+        { title: "Temp Class", field: "temperature_class", headerFilter: "input", width: 100 },
+        { title: "Temp Germ.", field: "temperature_germination", headerFilter: "input", width: 100 },
+        { title: "Temp Growing", field: "temperature_growing", headerFilter: "input", width: 110 },
+        { title: "Days Germ.", field: "days_germination", headerFilter: "number", hozAlign: "center", width: 90 },
+        { title: "Days Harvest", field: "days_harvest", headerFilter: "number", hozAlign: "center", width: 100 },
+        { title: "Nutritional Info", field: "nutritional_info", headerFilter: "input", width: 200 },
+        { title: "Energy", field: "energy", headerFilter: "number", hozAlign: "center", width: 80 },
+        { title: "Sensitivities", field: "sensitivities", headerFilter: "input", width: 150 },
+        { title: "Description", field: "description", headerFilter: "input", width: 200 }
+      ];
+
+      // Initialize Tabulator
+      new Tabulator("#edible-plants-table", {
+        data: filteredData,
+        columns: columns,
+        layout: "fitColumns",
+        pagination: true,
+        paginationSize: 10,
+        paginationSizeSelector: [10, 25, 50, 100],
+        movableColumns: true,
+        resizableColumns: true,
+        initialSort: [
+          { column: "common_name", dir: "asc" }
+        ]
+      });
+
+      // Create summary statistics using danfojs
+      createSummaryStats(filteredData);
+      
+      // Extract unique nutrient values and create checkboxes (using normalized values)
+      const uniqueNutrients = [...new Set(filteredData.map(d => d.nutrients_normalized).filter(n => n && n.trim() !== ''))];
+      // Sort from high to low, with "High Potassium Fertiliser Every 2 Weeks" last
+      uniqueNutrients.sort((a, b) => {
+        // Special case: "High Potassium Fertiliser Every 2 Weeks" always goes last
+        if (a.includes('Potassium')) return 1;
+        if (b.includes('Potassium')) return -1;
+        // Otherwise sort by intensity value (high to low)
+        return getIntensityValue(b) - getIntensityValue(a);
+      });
+      createNutrientCheckboxes(uniqueNutrients, filteredData);
+      
+      // Create visualization with Observable Plot
+      createVisualization(filteredData);
+    },
+    error: function(error) {
+      console.error('Error loading CSV:', error);
+      document.getElementById('edible-plants-table').innerHTML = '<p class="text-red-500 p-4">Error loading data. Please try again later.</p>';
+    }
+  });
+
+  function createSummaryStats(data) {
+    // All columns except first 2 (taxonomic_name, common_name)
+    const allCols = Object.keys(data[0]).slice(2).filter(col => !col.includes('_normalized'));
+    
+    // Separate numeric and categorical columns
+    const numericCols = [];
+    const categoricalCols = [];
+    
+    allCols.forEach(col => {
+      // Check if column has numeric values
+      const hasNumeric = data.some(d => {
+        const val = d[col];
+        return val && !isNaN(parseFloat(val)) && isFinite(val);
+      });
+      
+      if (hasNumeric) {
+        numericCols.push(col);
+      } else {
+        categoricalCols.push(col);
+      }
+    });
+    
+    // Calculate statistics for numeric columns
+    const stats = {
+      count: {},
+      mean: {},
+      std: {},
+      min: {},
+      '25%': {},
+      '50%': {},
+      '75%': {},
+      max: {}
+    };
+
+    numericCols.forEach(col => {
+      const values = data.map(d => parseFloat(d[col])).filter(v => !isNaN(v)).sort((a, b) => a - b);
+      const n = values.length;
+      
+      if (n > 0) {
+        const sum = values.reduce((a, b) => a + b, 0);
+        const mean = sum / n;
+        const variance = values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / n;
+        const std = Math.sqrt(variance);
+        
+        stats.count[col] = n;
+        stats.mean[col] = mean.toFixed(2);
+        stats.std[col] = std.toFixed(2);
+        stats.min[col] = values[0].toFixed(2);
+        stats['25%'][col] = values[Math.floor(n * 0.25)]?.toFixed(2) || 'N/A';
+        stats['50%'][col] = values[Math.floor(n * 0.5)]?.toFixed(2) || 'N/A';
+        stats['75%'][col] = values[Math.floor(n * 0.75)]?.toFixed(2) || 'N/A';
+        stats.max[col] = values[n - 1].toFixed(2);
+      }
+    });
+
+    // Create numeric summary table HTML
+    let tableHTML = '<h4 class="text-lg font-semibold mb-3">Numeric Columns Summary</h4>';
+    tableHTML += '<table class="min-w-full border-collapse border border-gray-300 text-sm">';
+    tableHTML += '<thead><tr class="bg-gray-100">';
+    tableHTML += '<th class="border border-gray-300 px-4 py-2 text-left">Statistic</th>';
+    numericCols.forEach(col => {
+      tableHTML += `<th class="border border-gray-300 px-4 py-2 text-left">${col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</th>`;
+    });
+    tableHTML += '</tr></thead><tbody>';
+
+    Object.keys(stats).forEach(stat => {
+      tableHTML += '<tr class="hover:bg-gray-50">';
+      tableHTML += `<td class="border border-gray-300 px-4 py-2 font-semibold">${stat}</td>`;
+      numericCols.forEach(col => {
+        tableHTML += `<td class="border border-gray-300 px-4 py-2">${stats[stat][col] || 'N/A'}</td>`;
+      });
+      tableHTML += '</tr>';
+    });
+
+    tableHTML += '</tbody></table>';
+
+    // Categorical summary with normalized values for water and sunlight
+    let catHTML = '<h4 class="text-lg font-semibold mt-6 mb-3">Categorical/Text Columns Summary</h4>';
+    catHTML += '<table class="min-w-full border-collapse border border-gray-300 text-sm">';
+    catHTML += '<thead><tr class="bg-gray-100">';
+    catHTML += '<th class="border border-gray-300 px-4 py-2 text-left">Column</th>';
+    catHTML += '<th class="border border-gray-300 px-4 py-2 text-left">Unique Values</th>';
+    catHTML += '<th class="border border-gray-300 px-4 py-2 text-left">Most Common</th>';
+    catHTML += '<th class="border border-gray-300 px-4 py-2 text-left">Count</th>';
+    catHTML += '</tr></thead><tbody>';
+
+    categoricalCols.forEach(col => {
+      const counts = {};
+      data.forEach(d => {
+        // Use normalized values for water and sunlight
+        let val;
+        if (col === 'water') {
+          val = d.water_normalized || 'Unknown';
+        } else if (col === 'sunlight') {
+          val = d.sunlight_normalized || 'Unknown';
+        } else {
+          val = d[col] && d[col].trim() !== '' ? d[col].trim() : 'Unknown';
+        }
+        counts[val] = (counts[val] || 0) + 1;
+      });
+      
+      const uniqueCount = Object.keys(counts).length;
+      const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+      
+      catHTML += '<tr class="hover:bg-gray-50">';
+      catHTML += `<td class="border border-gray-300 px-4 py-2 font-semibold">${col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</td>`;
+      catHTML += `<td class="border border-gray-300 px-4 py-2">${uniqueCount}</td>`;
+      catHTML += `<td class="border border-gray-300 px-4 py-2">${mostCommon ? (mostCommon[0].length > 30 ? mostCommon[0].substring(0, 30) + '...' : mostCommon[0]) : 'N/A'}</td>`;
+      catHTML += `<td class="border border-gray-300 px-4 py-2">${mostCommon ? mostCommon[1] : 'N/A'}</td>`;
+      catHTML += '</tr>';
+    });
+
+    catHTML += '</tbody></table>';
+
+    document.getElementById('summary-stats').innerHTML = 
+      `<div class="p-4 mb-6">${tableHTML}</div>
+       <div class="p-4">${catHTML}</div>`;
+  }
+
+  let currentPlot = null;
+  let fullData = [];
+  let globalWaterDomain = [];
+  let globalSunlightDomain = [];
+  let globalMinCount = 0;
+  let globalMaxCount = 0;
+  let globalPhMin = 0;
+  let globalPhMax = 0;
+
+  function createNutrientCheckboxes(nutrients, data) {
+    fullData = data;
+
+    // Calculate global domains from full data (these won't change when filtering)
+    globalWaterDomain = [...new Set(fullData.map(d => d.water_normalized || 'Unknown'))]
+      .sort((a, b) => getIntensityValue(b) - getIntensityValue(a));
+    globalSunlightDomain = [...new Set(fullData.map(d => d.sunlight_normalized || 'Unknown'))]
+      .sort((a, b) => getIntensityValue(b) - getIntensityValue(a));
+
+    // Calculate global min/max count from full data
+    const fullGrouped = {};
+    fullData.forEach(d => {
+      const sun = d.sunlight_normalized || 'Unknown';
+      const water = d.water_normalized || 'Unknown';
+      const key = `${sun}|${water}`;
+      if (!fullGrouped[key]) {
+        fullGrouped[key] = { count: 0 };
+      }
+      fullGrouped[key].count++;
+    });
+    const counts = Object.values(fullGrouped).map(g => g.count);
+    globalMinCount = Math.min(...counts);
+    globalMaxCount = Math.max(...counts);
+
+    // Calculate global pH min/max
+    const phLowerValues = fullData.map(d => parseFloat(d.preferred_ph_lower)).filter(v => !isNaN(v));
+    const phUpperValues = fullData.map(d => parseFloat(d.preferred_ph_upper)).filter(v => !isNaN(v));
+    globalPhMin = Math.min(...phLowerValues);
+    globalPhMax = Math.max(...phUpperValues);
+
+    const container = document.getElementById('nutrient-filters');
+    container.innerHTML = '<span class="font-semibold">Nutrients:</span>';
+
+    // Add Select All checkbox
+    const selectAllLabel = document.createElement('label');
+    selectAllLabel.className = 'inline-flex items-center cursor-pointer mr-4';
+
+    const selectAllCheckbox = document.createElement('input');
+    selectAllCheckbox.type = 'checkbox';
+    selectAllCheckbox.id = 'select-all-nutrients';
+    selectAllCheckbox.checked = true;
+    selectAllCheckbox.className = 'form-checkbox h-4 w-4 text-gray-600 rounded border-gray-300 focus:ring-gray-500 accent-gray-500';
+    selectAllCheckbox.addEventListener('change', function() {
+      const checkboxes = document.querySelectorAll('#nutrient-filters input[type="checkbox"]:not(#select-all-nutrients)');
+      checkboxes.forEach(cb => {
+        cb.checked = selectAllCheckbox.checked;
+      });
+      updateVisualization();
+    });
+
+    const selectAllSpan = document.createElement('span');
+    selectAllSpan.className = 'ml-1 mr-3 text-sm font-bold text-gray-800';
+    selectAllSpan.textContent = 'Select All';
+
+    selectAllLabel.appendChild(selectAllCheckbox);
+    selectAllLabel.appendChild(selectAllSpan);
+    container.appendChild(selectAllLabel);
+
+    nutrients.forEach(nutrient => {
+      const label = document.createElement('label');
+      label.className = 'inline-flex items-center cursor-pointer';
+      
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = nutrient;
+      checkbox.checked = true;
+      checkbox.className = 'form-checkbox h-4 w-4 text-gray-600 rounded border-gray-300 focus:ring-gray-500 accent-gray-500';
+      checkbox.addEventListener('change', updateVisualization);
+      
+      const span = document.createElement('span');
+      span.className = 'ml-1 mr-3 text-sm text-gray-700';
+      span.textContent = nutrient;
+      
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      container.appendChild(label);
+    });
+
+    // Add pH range slider below checkboxes
+    const phSliderContainer = document.createElement('div');
+    phSliderContainer.className = 'w-full mt-3';
+    phSliderContainer.innerHTML = `
+      <div class="flex items-center justify-center gap-2 px-4">
+        <span class="font-semibold text-sm">pH Range:</span>
+        <span id="ph-range-display" class="text-sm font-medium text-gray-700 min-w-[80px] text-left">${globalPhMin.toFixed(1)} - ${globalPhMax.toFixed(1)}</span>
+        <div id="ph-slider-container" class="relative w-full max-w-[336px] h-8 select-none cursor-pointer">
+          <div class="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 rounded -translate-y-1/2"></div>
+          <div id="ph-slider-track" class="absolute top-1/2 h-1 bg-gray-500 rounded -translate-y-1/2 pointer-events-none" style="left: 0%; right: 0%;"></div>
+          <div id="ph-lower-thumb" class="absolute top-1/2 w-4 h-4 bg-white border-2 border-gray-500 rounded shadow cursor-ew-resize -translate-y-1/2 -translate-x-1/2 z-20" style="left: 0%;"></div>
+          <div id="ph-upper-thumb" class="absolute top-1/2 w-4 h-4 bg-white border-2 border-gray-500 rounded shadow cursor-ew-resize -translate-y-1/2 -translate-x-1/2 z-20" style="left: 100%;"></div>
+        </div>
+      </div>
+    `;
+    container.appendChild(phSliderContainer);
+
+    // Initialize custom dual-handle slider - wait for DOM to be ready
+    requestAnimationFrame(() => {
+      const phSliderContainerEl = document.getElementById('ph-slider-container');
+      const phLowerThumb = document.getElementById('ph-lower-thumb');
+      const phUpperThumb = document.getElementById('ph-upper-thumb');
+      const phSliderTrack = document.getElementById('ph-slider-track');
+      const phRangeDisplay = document.getElementById('ph-range-display');
+
+      if (!phSliderContainerEl || !phLowerThumb || !phUpperThumb || !phSliderTrack || !phRangeDisplay) {
+        console.error('Slider elements not found');
+        return;
+      }
+
+      let phLowerValue = globalPhMin;
+      let phUpperValue = globalPhMax;
+      let isDraggingLower = false;
+      let isDraggingUpper = false;
+
+      const updateSliderUI = function() {
+        if (!phLowerThumb || !phUpperThumb || !phSliderTrack || !phRangeDisplay) return;
+        
+        const range = globalPhMax - globalPhMin;
+        
+        const lowerPercent = ((phLowerValue - globalPhMin) / range) * 100;
+        const upperPercent = ((phUpperValue - globalPhMin) / range) * 100;
+        
+        phLowerThumb.style.left = `${lowerPercent}%`;
+        phUpperThumb.style.left = `${upperPercent}%`;
+        phSliderTrack.style.left = `${lowerPercent}%`;
+        phSliderTrack.style.right = `${100 - upperPercent}%`;
+        
+        phRangeDisplay.textContent = `${phLowerValue.toFixed(1)} - ${phUpperValue.toFixed(1)}`;
+      };
+
+      const getValueFromPosition = function(clientX) {
+        const rect = phSliderContainerEl.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const percent = Math.max(0, Math.min(1, x / rect.width));
+        return globalPhMin + percent * (globalPhMax - globalPhMin);
+      };
+
+      const handleDrag = function(clientX) {
+        if (isDraggingLower) {
+          let newValue = getValueFromPosition(clientX);
+          // Round to nearest 0.1
+          newValue = Math.round(newValue * 10) / 10;
+          // Ensure lower doesn't exceed upper
+          if (newValue > phUpperValue) {
+            newValue = phUpperValue;
+          }
+          phLowerValue = newValue;
+          updateSliderUI();
+          updateVisualization();
+        } else if (isDraggingUpper) {
+          let newValue = getValueFromPosition(clientX);
+          // Round to nearest 0.1
+          newValue = Math.round(newValue * 10) / 10;
+          // Ensure upper doesn't go below lower
+          if (newValue < phLowerValue) {
+            newValue = phLowerValue;
+          }
+          phUpperValue = newValue;
+          updateSliderUI();
+          updateVisualization();
+        }
+      };
+
+    // Mouse events for lower thumb
+    phLowerThumb.addEventListener('mousedown', function(e) {
+      isDraggingLower = true;
+      e.preventDefault();
+    });
+
+    // Mouse events for upper thumb
+    phUpperThumb.addEventListener('mousedown', function(e) {
+      isDraggingUpper = true;
+      e.preventDefault();
+    });
+
+    // Mouse move and up events on document
+    document.addEventListener('mousemove', function(e) {
+      if (isDraggingLower || isDraggingUpper) {
+        handleDrag(e.clientX);
+      }
+    });
+
+    document.addEventListener('mouseup', function() {
+      isDraggingLower = false;
+      isDraggingUpper = false;
+    });
+
+    // Touch events for lower thumb
+    phLowerThumb.addEventListener('touchstart', function(e) {
+      isDraggingLower = true;
+      e.preventDefault();
+    });
+
+    // Touch events for upper thumb
+    phUpperThumb.addEventListener('touchstart', function(e) {
+      isDraggingUpper = true;
+      e.preventDefault();
+    });
+
+    // Touch move and end events on document
+    document.addEventListener('touchmove', function(e) {
+      if (isDraggingLower || isDraggingUpper) {
+        handleDrag(e.touches[0].clientX);
+      }
+    });
+
+    document.addEventListener('touchend', function() {
+      isDraggingLower = false;
+      isDraggingUpper = false;
+    });
+
+    // Click on track to move nearest thumb
+    phSliderContainerEl.addEventListener('click', function(e) {
+      // Check if clicking on thumbs - if so, let the thumb handlers work
+      if (e.target === phLowerThumb || e.target === phUpperThumb) {
+        return;
+      }
+      
+      // Get click position relative to container
+      const rect = phSliderContainerEl.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      
+      // Clamp to container bounds
+      const clampedX = Math.max(0, Math.min(rect.width, x));
+      const newValue = globalPhMin + (clampedX / rect.width) * (globalPhMax - globalPhMin);
+      const roundedValue = Math.round(newValue * 10) / 10;
+      
+      // Determine which thumb is closer
+      const lowerDiff = Math.abs(roundedValue - phLowerValue);
+      const upperDiff = Math.abs(roundedValue - phUpperValue);
+      
+      if (lowerDiff < upperDiff) {
+        if (roundedValue <= phUpperValue) {
+          phLowerValue = roundedValue;
+        }
+      } else {
+        if (roundedValue >= phLowerValue) {
+          phUpperValue = roundedValue;
+        }
+      }
+      
+      updateSliderUI();
+      updateVisualization();
+    });
+    });
+  }
+
+  function updateVisualization() {
+    const checkboxes = document.querySelectorAll('#nutrient-filters input[type="checkbox"]:not(#select-all-nutrients)');
+    const selectedNutrients = Array.from(checkboxes)
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+
+    const phLowerSliderContainer = document.getElementById('ph-slider-container');
+    let phLower = globalPhMin;
+    let phUpper = globalPhMax;
+    
+    if (phLowerSliderContainer) {
+      // Get values from the slider state
+      const phLowerThumb = document.getElementById('ph-lower-thumb');
+      const phUpperThumb = document.getElementById('ph-upper-thumb');
+      
+      if (phLowerThumb && phUpperThumb && phLowerThumb.style.left && phUpperThumb.style.left) {
+        const range = globalPhMax - globalPhMin;
+        const lowerPercent = parseFloat(phLowerThumb.style.left) / 100;
+        const upperPercent = parseFloat(phUpperThumb.style.left) / 100;
+        
+        phLower = globalPhMin + lowerPercent * range;
+        phUpper = globalPhMin + upperPercent * range;
+        
+        // Round to nearest 0.1
+        phLower = Math.round(phLower * 10) / 10;
+        phUpper = Math.round(phUpper * 10) / 10;
+      }
+    }
+
+    const filteredData = fullData.filter(d => {
+      const nutrientMatch = selectedNutrients.includes(d.nutrients_normalized);
+      const phLowerVal = parseFloat(d.preferred_ph_lower);
+      const phUpperVal = parseFloat(d.preferred_ph_upper);
+      
+      // Check if the plant's pH range is within the selected pH range
+      const phMatch = !isNaN(phLowerVal) && !isNaN(phUpperVal) && 
+                      phLowerVal >= phLower && phUpperVal <= phUpper;
+      
+      return nutrientMatch && phMatch;
+    });
+    createVisualization(filteredData);
+  }
+
+  function createVisualization(data) {
+    // Clear previous plot
+    const plotContainer = document.getElementById('viz-plot');
+    plotContainer.innerHTML = '';
+
+    // Group by normalized sunlight and water
+    const grouped = {};
+    data.forEach(d => {
+      const sun = d.sunlight_normalized || 'Unknown';
+      const water = d.water_normalized || 'Unknown';
+      const key = `${sun}|${water}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          sunlight: sun,
+          water: water,
+          count: 0
+        };
+      }
+      grouped[key].count++;
+    });
+
+    const plotData = Object.values(grouped);
+
+    // Use global domains so axes don't change when filtering
+    // Use global min/max count so color scale doesn't change
+
+    // Find leftmost point for each sunlight category for y-axis labels
+    const yLabels = [];
+    globalSunlightDomain.forEach(sun => {
+      const pointsInCategory = plotData.filter(d => d.sunlight === sun);
+      if (pointsInCategory.length > 0) {
+        // Find leftmost point (minimum x value)
+        const leftmost = pointsInCategory.reduce((min, d) => {
+          const minVal = globalWaterDomain.indexOf(min.water);
+          const dVal = globalWaterDomain.indexOf(d.water);
+          return dVal < minVal ? d : min;
+        });
+        yLabels.push({
+          sunlight: sun,
+          water: leftmost.water,
+          count: leftmost.count
+        });
+      }
+    });
+
+    // Build marks array - only add data marks if there's data
+    const marks = [];
+
+    // Add custom y-axis labels positioned at leftmost point of each category (only when there's data)
+    if (plotData.length > 0) {
+      marks.push(
+        Plot.text(yLabels, {
+          x: "water",
+          y: "sunlight",
+          text: d => d.sunlight + " ⟶",
+          dx: -30,
+          textAnchor: "end",
+          fontSize: 14,
+          fill: "black"
+        })
+      );
+    }
+
+    if (plotData.length > 0) {
+      marks.push(
+        Plot.dot(plotData, {
+          x: "water",
+          y: "sunlight",
+          r: "count",
+          fill: "count",
+          stroke: "white",
+          strokeWidth: 1
+        }),
+        Plot.text(plotData, {
+          x: "water",
+          y: "sunlight",
+          text: "count",
+          fill: d => d.count > (globalMinCount + globalMaxCount) / 2 ? "white" : "black",
+          fontSize: 14,
+          fontWeight: "bold"
+        })
+      );
+    }
+
+    // Create Observable Plot with fixed domains and larger fonts
+    // Axes and colorbar are always shown, even when no data points
+    const plot = Plot.plot({
+      width: 800,
+      height: 500,
+      marginLeft: 21,
+      marginBottom: 80,
+      style: {
+        fontSize: "14px"
+      },
+      x: {
+        label: "",
+        labelAnchor: "center",
+        fontSize: 14,
+        tickSize: 0,
+        domain: globalWaterDomain,
+        tickFormat: d => d === "Medium" ? "Medium Water" : d,
+        grid: true
+      },
+      y: {
+        label: "",
+        labelAnchor: "center",
+        fontSize: 14,
+        tickSize: 0,
+        axis: null,
+        domain: globalSunlightDomain
+      },
+      r: {
+        range: [8, 45]
+      },
+      color: {
+        interpolate: t => d3.interpolateRgbBasis(["#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#0c2c84"])(t),
+        label: "Count",
+        domain: [globalMinCount, globalMaxCount]
+      },
+      marks: marks
+    });
+
+    currentPlot = plot;
+
+    // Create a wrapper for plot and colorbar
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.display = 'inline-block';
+    wrapper.appendChild(plot);
+
+    // Create custom SVG colorbar at bottom right
+    const colorbarWidth = 150;
+    const colorbarHeight = 50;
+    const colorbarMargin = { top: 30, right: 0, bottom: 0, left: 0 };
+
+    // Calculate total plants plotted
+    const totalPlants = plotData.reduce((sum, d) => sum + d.count, 0);
+
+    const colorbarSvg = d3.select(wrapper)
+      .append('svg')
+      .attr('width', colorbarWidth + colorbarMargin.left + colorbarMargin.right)
+      .attr('height', colorbarHeight + colorbarMargin.top + colorbarMargin.bottom)
+      .style('position', 'absolute')
+      .style('bottom', '100px')
+      .style('right', '97px')
+      .style('background', 'transparent');
+
+    // Add total plants count above colorbar
+    colorbarSvg.append('text')
+      .attr('x', colorbarMargin.left + colorbarWidth / 2)
+      .attr('y', colorbarMargin.top - 15)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '16px')
+      .style('font-weight', 'bold')
+      .text(`Total Plants: ${totalPlants}`);
+
+    // Create gradient
+    const defs = colorbarSvg.append('defs');
+    const gradient = defs.append('linearGradient')
+      .attr('id', 'colorbar-gradient')
+      .attr('x1', '0%')
+      .attr('x2', '100%')
+      .attr('y1', '0%')
+      .attr('y2', '0%');
+
+    const colors = ["#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#0c2c84"];
+    colors.forEach((color, i) => {
+      gradient.append('stop')
+        .attr('offset', `${(i / (colors.length - 1)) * 100}%`)
+        .attr('stop-color', color);
+    });
+
+    // Draw gradient rectangle
+    colorbarSvg.append('rect')
+      .attr('x', colorbarMargin.left)
+      .attr('y', colorbarMargin.top)
+      .attr('width', colorbarWidth)
+      .attr('height', 10)
+      .style('fill', 'url(#colorbar-gradient)');
+
+    // Add axis
+    const colorScale = d3.scaleLinear()
+      .domain([globalMinCount, globalMaxCount])
+      .range([0, colorbarWidth]);
+
+    const axis = d3.axisBottom(colorScale)
+      .ticks(5)
+      .tickSize(5);
+
+    const axisGroup = colorbarSvg.append('g')
+      .attr('transform', `translate(${colorbarMargin.left}, ${colorbarMargin.top + 10})`)
+      .call(axis.tickSize(3).tickPadding(2));
+
+    axisGroup.selectAll('text')
+      .style('font-size', '11px');
+
+    // Remove the axis line (domain path)
+    axisGroup.select('.domain').remove();
+
+    // Add label
+    colorbarSvg.append('text')
+      .attr('x', colorbarMargin.left + colorbarWidth / 2)
+      .attr('y', colorbarHeight + colorbarMargin.top - 15)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '10px')
+      .style('font-weight', 'bold')
+      .text('Count');
+
+    plotContainer.appendChild(wrapper);
+  }
+</script>
+
+{% enddemo %}
