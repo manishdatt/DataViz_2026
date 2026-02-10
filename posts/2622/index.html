@@ -1,0 +1,676 @@
+---
+title: The 2026 Winter Olympics
+author: Manish Datt
+date: '2026-02-10'
+description: Planner for the 2026 Winter Olympics.
+image: Winter_Olympics.png
+categories:
+  - TidyTuesday
+slug: 2622
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet" />
+  <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+
+    .tabulator {
+      border: 1px solid #e5e7eb;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .tabulator .tabulator-header {
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .tabulator .tabulator-col,
+    .tabulator .tabulator-cell {
+      border-right: 1px solid #f3f4f6;
+    }
+
+    .tabulator .tabulator-row:nth-child(even) {
+      background: #fcfcfd;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <main class="max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
+    <section class="bg-white shadow-sm ring-1 ring-slate-200 rounded-2xl p-6 sm:p-8">
+      <div class="flex flex-col gap-2 mb-6">
+        <h2 class="text-xl sm:text-2xl font-semibold text-slate-900"> The 2026 Winter Olympics Planner</h2>
+        <p class="text-slate-600 text-sm sm:text-base">Filter events, switch views, and inspect a focused schedule.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Total Events</p>
+          <p id="stat-total" class="text-2xl font-semibold text-slate-900 mt-1">0</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Medal Events</p>
+          <p id="stat-medal" class="text-2xl font-semibold text-slate-900 mt-1">0</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Training Sessions</p>
+          <p id="stat-training" class="text-2xl font-semibold text-slate-900 mt-1">0</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Venues</p>
+          <p id="stat-venues" class="text-2xl font-semibold text-slate-900 mt-1">0</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <aside class="xl:col-span-12 space-y-4">
+          <div class="rounded-xl border border-slate-200 p-4">
+            <p class="text-sm font-medium text-slate-800 mb-3">Planner Controls</p>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div>
+                <label for="filter-date" class="block text-xs font-medium text-slate-600 mb-1">Date</label>
+                <input id="filter-date" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label for="filter-discipline" class="block text-xs font-medium text-slate-600 mb-1">Discipline</label>
+                <select id="filter-discipline" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">All disciplines</option>
+                </select>
+              </div>
+              <div>
+                <label for="filter-venue" class="block text-xs font-medium text-slate-600 mb-1">Venue</label>
+                <select id="filter-venue" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">All venues</option>
+                </select>
+              </div>
+              <div>
+                <label for="filter-search" class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                <input id="filter-search" type="text" placeholder="Event, discipline, venue" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Medal</label>
+                <label class="h-[42px] flex items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm text-slate-700">
+                  <input id="filter-medal" type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  Medal only
+                </label>
+              </div>
+            </div>
+            <div class="flex gap-2 mt-4">
+              <button id="reset-filters" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">Reset</button>
+              <button id="export-plan" class="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">Export CSV</button>
+            </div>
+          </div>
+        </aside>
+
+        <div class="xl:col-span-12">
+          <div class="flex flex-wrap items-center gap-2 mb-4">
+            <button data-view="day" class="planner-view-btn rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white">Day View</button>
+            <button data-view="week" class="planner-view-btn rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white">Week View</button>
+            <button data-view="discipline" class="planner-view-btn rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white">By Discipline</button>
+            <button data-view="venue" class="planner-view-btn rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white">By Venue</button>
+          </div>
+          <div id="day-carousel-controls" class="hidden flex items-center gap-2 mb-4">
+            <button id="day-prev" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white hover:bg-slate-50" aria-label="Previous day">&larr;</button>
+            <p id="day-label" class="text-sm font-medium text-slate-700 min-w-[180px] text-center"></p>
+            <button id="day-next" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white hover:bg-slate-50" aria-label="Next day">&rarr;</button>
+          </div>
+          <div id="week-carousel-controls" class="hidden flex items-center gap-2 mb-4">
+            <button id="week-prev" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white hover:bg-slate-50" aria-label="Previous week">&larr;</button>
+            <p id="week-label" class="text-sm font-medium text-slate-700 min-w-[260px] text-center"></p>
+            <button id="week-next" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 bg-white hover:bg-slate-50" aria-label="Next week">&rarr;</button>
+          </div>
+
+          <div id="planner-meta" class="text-sm text-slate-600 mb-3"></div>
+          <div id="planner-board" class="rounded-xl border border-slate-200 bg-white p-4 min-h-[280px]"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-white shadow-sm ring-1 ring-slate-200 rounded-2xl p-6 sm:p-8 mt-8">
+      <div id="schedule-table"></div>
+      <div id="table-status" class="text-sm text-slate-500 mt-3">Loading CSV data...</div>
+    </section>
+  </main>
+
+  <script>
+    const csvUrl = "schedule.csv";
+
+    const statusEl = document.getElementById("table-status");
+    const plannerBoardEl = document.getElementById("planner-board");
+    const plannerMetaEl = document.getElementById("planner-meta");
+    const statTotalEl = document.getElementById("stat-total");
+    const statMedalEl = document.getElementById("stat-medal");
+    const statTrainingEl = document.getElementById("stat-training");
+    const statVenuesEl = document.getElementById("stat-venues");
+    const filterDateEl = document.getElementById("filter-date");
+    const filterDisciplineEl = document.getElementById("filter-discipline");
+    const filterVenueEl = document.getElementById("filter-venue");
+    const filterSearchEl = document.getElementById("filter-search");
+    const filterMedalEl = document.getElementById("filter-medal");
+    const resetFiltersEl = document.getElementById("reset-filters");
+    const exportPlanEl = document.getElementById("export-plan");
+    const viewButtons = document.querySelectorAll(".planner-view-btn");
+    const dayCarouselControlsEl = document.getElementById("day-carousel-controls");
+    const dayPrevEl = document.getElementById("day-prev");
+    const dayNextEl = document.getElementById("day-next");
+    const dayLabelEl = document.getElementById("day-label");
+    const weekCarouselControlsEl = document.getElementById("week-carousel-controls");
+    const weekPrevEl = document.getElementById("week-prev");
+    const weekNextEl = document.getElementById("week-next");
+    const weekLabelEl = document.getElementById("week-label");
+
+    let allData = [];
+    let availableDates = [];
+    let plannerState = {
+      view: "day",
+      date: "",
+      discipline: "",
+      venue: "",
+      text: "",
+      medalOnly: false,
+    };
+
+    function toColumns(row) {
+      return Object.keys(row).map((key) => ({
+        title: key.replaceAll("_", " "),
+        field: key,
+        headerFilter: "input",
+        sorter: "string",
+        minWidth: 140,
+      }));
+    }
+
+    function toLocalDateKey(dateObj) {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const day = String(dateObj.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function normalizeDateKey(rawDate) {
+      if (!rawDate) return "";
+      const text = String(rawDate).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+      const parsed = new Date(text);
+      if (!Number.isNaN(parsed.getTime())) return toLocalDateKey(parsed);
+      return "";
+    }
+
+    function parseDateTime(row, dateKey, timeKey, dateTimeKey) {
+      if (row[dateKey] && row[timeKey]) {
+        const normalizedDate = normalizeDateKey(row[dateKey]);
+        if (normalizedDate) {
+          const value = new Date(`${normalizedDate}T${row[timeKey]}`);
+          if (!Number.isNaN(value.getTime())) return value;
+        }
+        const fallback = new Date(`${row[dateKey]} ${row[timeKey]}`);
+        if (!Number.isNaN(fallback.getTime())) return fallback;
+      }
+      if (row[dateTimeKey]) {
+        const value = new Date(row[dateTimeKey]);
+        if (!Number.isNaN(value.getTime())) return value;
+      }
+      return null;
+    }
+
+    function formatClock(dateObj) {
+      if (!dateObj) return "TBD";
+      return dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function formatDay(dateObj) {
+      if (!dateObj) return "Unknown date";
+      return dateObj.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    }
+
+    function formatDayFromKey(dateKey) {
+      if (!dateKey) return "Unknown date";
+      const value = new Date(`${dateKey}T00:00:00`);
+      if (Number.isNaN(value.getTime())) return "Unknown date";
+      return value.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    }
+
+    function normalizeData(rows) {
+      return rows.map((row) => {
+        const start = parseDateTime(row, "date", "start_time", "start_datetime_local");
+        const end = parseDateTime(row, "date", "end_time", "end_datetime_local");
+        const explicitDateKey = normalizeDateKey(row.date);
+        const dateKey = explicitDateKey || (start ? toLocalDateKey(start) : "");
+        return {
+          ...row,
+          _start: start,
+          _end: end,
+          _dateKey: dateKey,
+          _title: row.event_description || row.discipline_name || row.event_code || "Untitled Event",
+          _isMedal: String(row.is_medal_event).toLowerCase() === "true",
+          _isTraining: String(row.is_training).toLowerCase() === "true",
+        };
+      });
+    }
+
+    function setSelectOptions(selectEl, values, firstLabel) {
+      selectEl.innerHTML = `<option value="">${firstLabel}</option>`;
+      values.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        selectEl.appendChild(option);
+      });
+    }
+
+    function getFilteredData(options = {}) {
+      const { includeDate = true } = options;
+      const selectedDate = plannerState.date;
+      const text = plannerState.text.trim().toLowerCase();
+      return allData.filter((row) => {
+        if (includeDate && selectedDate && row._dateKey !== selectedDate) return false;
+        if (plannerState.discipline && row.discipline_name !== plannerState.discipline) return false;
+        if (plannerState.venue && row.venue_name !== plannerState.venue) return false;
+        if (plannerState.medalOnly && !row._isMedal) return false;
+        if (text) {
+          const blob = `${row._title} ${row.discipline_name || ""} ${row.venue_name || ""}`.toLowerCase();
+          if (!blob.includes(text)) return false;
+        }
+        return true;
+      });
+    }
+
+    function moveDay(offset) {
+      if (!availableDates.length) return;
+      const currentIndex = availableDates.indexOf(plannerState.date);
+      const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+      const nextIndex = Math.max(0, Math.min(availableDates.length - 1, safeIndex + offset));
+      plannerState.date = availableDates[nextIndex];
+      filterDateEl.value = plannerState.date;
+      renderPlanner();
+    }
+
+    function getWeekStartDate(dateKey) {
+      if (!dateKey) return null;
+      const selected = new Date(`${dateKey}T00:00:00`);
+      if (Number.isNaN(selected.getTime())) return null;
+      const day = selected.getDay();
+      const mondayShift = day === 0 ? -6 : 1 - day;
+      const weekStart = new Date(selected);
+      weekStart.setDate(selected.getDate() + mondayShift);
+      weekStart.setHours(0, 0, 0, 0);
+      return weekStart;
+    }
+
+    function moveWeek(offsetWeeks) {
+      if (!availableDates.length) return;
+      const baseDateKey = plannerState.date || availableDates[0];
+      const base = new Date(`${baseDateKey}T00:00:00`);
+      if (Number.isNaN(base.getTime())) return;
+      base.setDate(base.getDate() + offsetWeeks * 7);
+
+      const targetTime = base.getTime();
+      let bestIndex = 0;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      availableDates.forEach((dateKey, idx) => {
+        const candidate = new Date(`${dateKey}T00:00:00`);
+        if (Number.isNaN(candidate.getTime())) return;
+        const distance = Math.abs(candidate.getTime() - targetTime);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = idx;
+        }
+      });
+
+      plannerState.date = availableDates[bestIndex];
+      filterDateEl.value = plannerState.date;
+      renderPlanner();
+    }
+
+    function updateStats(data) {
+      statTotalEl.textContent = data.length.toString();
+      statMedalEl.textContent = data.filter((r) => r._isMedal).length.toString();
+      statTrainingEl.textContent = data.filter((r) => r._isTraining).length.toString();
+      statVenuesEl.textContent = new Set(data.map((r) => r.venue_name).filter(Boolean)).size.toString();
+    }
+
+    function renderEventCard(row) {
+      const medalBadge = row._isMedal ? "<span class=\"ml-2 rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5\">Medal</span>" : "";
+      const trainingBadge = row._isTraining ? "<span class=\"ml-2 rounded-full bg-sky-100 text-sky-800 text-xs px-2 py-0.5\">Training</span>" : "";
+      return `
+        <article class="rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="font-medium text-slate-900">${row._title}</p>
+            <p class="text-sm text-slate-600">${formatClock(row._start)} - ${formatClock(row._end)}</p>
+          </div>
+          <p class="text-sm text-slate-600 mt-1">${row.discipline_name || "Unknown discipline"} | ${row.venue_name || "Unknown venue"}</p>
+          <p class="text-xs text-slate-500 mt-1">${formatDay(row._start)}</p>
+          <div class="mt-2">${medalBadge}${trainingBadge}</div>
+        </article>
+      `;
+    }
+
+    function renderTimeGroup(rows) {
+      const sample = rows[0];
+      const timeLabel = `${formatClock(sample._start)} - ${formatClock(sample._end)}`;
+      const dayLabel = formatDayFromKey(sample._dateKey) || formatDay(sample._start);
+      const countLabel = rows.length > 1 ? `<span class="ml-2 rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5">${rows.length} events</span>` : "";
+
+      return `
+        <section class="rounded-lg border border-slate-200 p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="font-semibold text-slate-900">${timeLabel}${countLabel}</p>
+            <p class="text-xs text-slate-500">${dayLabel}</p>
+          </div>
+          <div class="mt-2 grid grid-cols-1 md:grid-cols-4 gap-2">
+            ${rows.map((row) => {
+              const medalBadge = row._isMedal ? "<span class=\"ml-2 rounded-full bg-amber-100 text-amber-800 text-xs px-2 py-0.5\">Medal</span>" : "";
+              const trainingBadge = row._isTraining ? "<span class=\"ml-2 rounded-full bg-sky-100 text-sky-800 text-xs px-2 py-0.5\">Training</span>" : "";
+              return `
+                <article class="h-full rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+                  <p class="font-medium text-slate-900">${row._title}</p>
+                  <p class="text-sm text-slate-600 mt-1">${row.discipline_name || "Unknown discipline"} | ${row.venue_name || "Unknown venue"}</p>
+                  <div class="mt-2">${medalBadge}${trainingBadge}</div>
+                </article>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function groupBy(data, field) {
+      const grouped = new Map();
+      data.forEach((row) => {
+        const key = row[field] || "Unspecified";
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(row);
+      });
+      return grouped;
+    }
+
+    function renderDayView(data) {
+      const dayScoped = plannerState.date
+        ? data.filter((row) => row._dateKey === plannerState.date)
+        : data;
+      const sorted = [...dayScoped].sort((a, b) => (a._start?.getTime() || 0) - (b._start?.getTime() || 0));
+      if (!sorted.length) return "<p class=\"text-sm text-slate-500\">No events match the current filters.</p>";
+
+      const groupedByTime = new Map();
+      sorted.forEach((row) => {
+        const slotKey = `${row._dateKey || ""}|${row._start?.getTime() || "na"}|${row._end?.getTime() || "na"}`;
+        if (!groupedByTime.has(slotKey)) groupedByTime.set(slotKey, []);
+        groupedByTime.get(slotKey).push(row);
+      });
+
+      const groupedSections = [...groupedByTime.values()].map(renderTimeGroup).join("");
+      return `<div class="space-y-3">${groupedSections}</div>`;
+    }
+
+    function renderWeekView(data) {
+      if (!plannerState.date) return "<p class=\"text-sm text-slate-500\">Select a date to open week view.</p>";
+      const selected = new Date(`${plannerState.date}T00:00:00`);
+      const day = selected.getDay();
+      const mondayShift = day === 0 ? -6 : 1 - day;
+      const weekStart = new Date(selected);
+      weekStart.setDate(selected.getDate() + mondayShift);
+      const weekDays = Array.from({ length: 7 }, (_, idx) => {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + idx);
+        const key = toLocalDateKey(d);
+        const dayRows = data
+          .filter((row) => row._dateKey === key)
+          .sort((a, b) => (a._start?.getTime() || 0) - (b._start?.getTime() || 0));
+        return { date: d, rows: dayRows };
+      }).filter((item) => {
+        if (!availableDates.length) return true;
+        const key = toLocalDateKey(item.date);
+        return key >= availableDates[0] && key <= availableDates[availableDates.length - 1];
+      });
+
+      return `
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            ${weekDays.map((item) => `
+              <div class="rounded-lg border border-slate-200 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-800">${item.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</p>
+                  <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">${item.rows.length} event(s)</span>
+                </div>
+                <ul class="mt-2 space-y-1 text-sm text-slate-700">
+                  ${item.rows.slice(0, 3).map((row) => `<li>${formatClock(row._start)} ${row._title}</li>`).join("") || "<li class=\"text-slate-400\">No events</li>"}
+                </ul>
+              </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderGroupedView(data, field, heading) {
+      const grouped = groupBy(data, field);
+      if (!grouped.size) return "<p class=\"text-sm text-slate-500\">No events match the current filters.</p>";
+      const sections = [...grouped.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, rows]) => {
+          const sorted = rows.sort((a, b) => (a._start?.getTime() || 0) - (b._start?.getTime() || 0));
+          return `
+            <div class="rounded-lg border border-slate-200 p-3">
+              <p class="font-medium text-slate-900">${heading}: ${key}</p>
+              <p class="text-xs text-slate-500 mb-2">${rows.length} event(s)</p>
+              <div class="space-y-2">${sorted.slice(0, 8).map(renderEventCard).join("")}</div>
+            </div>
+          `;
+        });
+      return `<div class="space-y-3">${sections.join("")}</div>`;
+    }
+
+    function renderPlanner() {
+      if (plannerState.view === "day" && !plannerState.date && availableDates.length) {
+        plannerState.date = availableDates[0];
+        filterDateEl.value = plannerState.date;
+      }
+
+      const filtered = getFilteredData({ includeDate: plannerState.view !== "week" });
+      updateStats(filtered);
+      plannerMetaEl.textContent = `${filtered.length} matching events | View: ${plannerState.view}`;
+
+      if (plannerState.view === "week") {
+        plannerBoardEl.innerHTML = renderWeekView(filtered);
+      } else if (plannerState.view === "discipline") {
+        plannerBoardEl.innerHTML = renderGroupedView(filtered, "discipline_name", "Discipline");
+      } else if (plannerState.view === "venue") {
+        plannerBoardEl.innerHTML = renderGroupedView(filtered, "venue_name", "Venue");
+      } else {
+        plannerBoardEl.innerHTML = renderDayView(filtered);
+      }
+
+      viewButtons.forEach((button) => {
+        const active = button.dataset.view === plannerState.view;
+        button.classList.toggle("bg-blue-600", active);
+        button.classList.toggle("bg-white", !active);
+        button.classList.toggle("text-white", active);
+        button.classList.toggle("text-slate-700", !active);
+        button.classList.toggle("border-blue-600", active);
+        button.classList.toggle("border-slate-300", !active);
+      });
+
+      const isDayView = plannerState.view === "day";
+      const isWeekView = plannerState.view === "week";
+      dayCarouselControlsEl.classList.toggle("hidden", !isDayView);
+      weekCarouselControlsEl.classList.toggle("hidden", !isWeekView);
+      if (isDayView) {
+        const currentIndex = availableDates.indexOf(plannerState.date);
+        const hasDate = currentIndex >= 0;
+        const currentDate = hasDate ? new Date(`${plannerState.date}T00:00:00`) : null;
+        dayLabelEl.textContent = currentDate
+          ? currentDate.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })
+          : "No day selected";
+        dayPrevEl.disabled = !hasDate || currentIndex === 0;
+        dayNextEl.disabled = !hasDate || currentIndex === availableDates.length - 1;
+        dayPrevEl.classList.toggle("opacity-50", dayPrevEl.disabled);
+        dayPrevEl.classList.toggle("cursor-not-allowed", dayPrevEl.disabled);
+        dayNextEl.classList.toggle("opacity-50", dayNextEl.disabled);
+        dayNextEl.classList.toggle("cursor-not-allowed", dayNextEl.disabled);
+      }
+      if (isWeekView) {
+        const currentWeekStart = getWeekStartDate(plannerState.date);
+        if (!currentWeekStart || !availableDates.length) {
+          weekLabelEl.textContent = "No week selected";
+          weekPrevEl.disabled = true;
+          weekNextEl.disabled = true;
+        } else {
+          const currentWeekEnd = new Date(currentWeekStart);
+          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+          const firstDate = new Date(`${availableDates[0]}T00:00:00`);
+          const lastDate = new Date(`${availableDates[availableDates.length - 1]}T00:00:00`);
+          const firstWeekStart = getWeekStartDate(availableDates[0]);
+          const lastWeekStart = getWeekStartDate(availableDates[availableDates.length - 1]);
+
+          weekLabelEl.textContent = `${currentWeekStart.toLocaleDateString([], { month: "short", day: "numeric" })} - ${currentWeekEnd.toLocaleDateString([], { month: "short", day: "numeric" })}`;
+          weekPrevEl.disabled = !firstDate || !firstWeekStart || currentWeekStart.getTime() <= firstWeekStart.getTime();
+          weekNextEl.disabled = !lastDate || !lastWeekStart || currentWeekStart.getTime() >= lastWeekStart.getTime();
+        }
+        weekPrevEl.classList.toggle("opacity-50", weekPrevEl.disabled);
+        weekPrevEl.classList.toggle("cursor-not-allowed", weekPrevEl.disabled);
+        weekNextEl.classList.toggle("opacity-50", weekNextEl.disabled);
+        weekNextEl.classList.toggle("cursor-not-allowed", weekNextEl.disabled);
+      }
+    }
+
+    function setupPlanner(data) {
+      allData = normalizeData(data);
+
+      const dates = [...new Set(allData.map((r) => r._dateKey).filter(Boolean))].sort();
+      availableDates = dates;
+      const disciplines = [...new Set(allData.map((r) => r.discipline_name).filter(Boolean))].sort();
+      const venues = [...new Set(allData.map((r) => r.venue_name).filter(Boolean))].sort();
+
+      setSelectOptions(filterDisciplineEl, disciplines, "All disciplines");
+      setSelectOptions(filterVenueEl, venues, "All venues");
+      plannerState.date = dates[0] || "";
+      filterDateEl.value = plannerState.date;
+
+      filterDateEl.addEventListener("change", (event) => {
+        plannerState.date = event.target.value;
+        renderPlanner();
+      });
+      filterDisciplineEl.addEventListener("change", (event) => {
+        plannerState.discipline = event.target.value;
+        renderPlanner();
+      });
+      filterVenueEl.addEventListener("change", (event) => {
+        plannerState.venue = event.target.value;
+        renderPlanner();
+      });
+      filterSearchEl.addEventListener("input", (event) => {
+        plannerState.text = event.target.value;
+        renderPlanner();
+      });
+      filterMedalEl.addEventListener("change", (event) => {
+        plannerState.medalOnly = event.target.checked;
+        renderPlanner();
+      });
+
+      resetFiltersEl.addEventListener("click", () => {
+        plannerState = {
+          ...plannerState,
+          date: dates[0] || "",
+          discipline: "",
+          venue: "",
+          text: "",
+          medalOnly: false,
+        };
+        filterDateEl.value = plannerState.date;
+        filterDisciplineEl.value = "";
+        filterVenueEl.value = "";
+        filterSearchEl.value = "";
+        filterMedalEl.checked = false;
+        renderPlanner();
+      });
+
+      exportPlanEl.addEventListener("click", () => {
+        const filtered = getFilteredData();
+        const csv = Papa.unparse(filtered.map((row) => ({
+          date: row.date,
+          start_time: row.start_time,
+          end_time: row.end_time,
+          discipline_name: row.discipline_name,
+          event_description: row.event_description,
+          venue_name: row.venue_name,
+          is_medal_event: row.is_medal_event,
+          is_training: row.is_training,
+        })));
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "planner_filtered_events.csv";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+
+      viewButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          plannerState.view = button.dataset.view;
+          renderPlanner();
+        });
+      });
+      dayPrevEl.addEventListener("click", () => moveDay(-1));
+      dayNextEl.addEventListener("click", () => moveDay(1));
+      weekPrevEl.addEventListener("click", () => moveWeek(-1));
+      weekNextEl.addEventListener("click", () => moveWeek(1));
+
+      renderPlanner();
+    }
+
+    async function buildTable() {
+      try {
+        const response = await fetch(csvUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch CSV (${response.status})`);
+        }
+
+        const csvText = await response.text();
+        const parsed = Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: true,
+        });
+
+        if (parsed.errors.length) {
+          throw new Error(parsed.errors[0].message || "CSV parsing error");
+        }
+
+        const data = parsed.data;
+
+        if (!data.length) {
+          statusEl.textContent = "No rows found in CSV.";
+          return;
+        }
+
+        new Tabulator("#schedule-table", {
+          data,
+          layout: "fitDataStretch",
+          columns: toColumns(data[0]),
+          pagination: true,
+          paginationSize: 15,
+          movableColumns: true,
+          height: "70vh",
+        });
+
+        setupPlanner(data);
+        statusEl.textContent = `Loaded ${data.length} rows.`;
+      } catch (error) {
+        statusEl.textContent = `Error: ${error.message}`;
+        statusEl.classList.remove("text-slate-500");
+        statusEl.classList.add("text-red-600");
+      }
+    }
+
+    buildTable();
+  </script>
+
+{% enddemo %}
