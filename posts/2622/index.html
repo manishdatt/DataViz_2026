@@ -7,11 +7,11 @@ image: Winter_Olympics.png
 categories:
   - TidyTuesday
 slug: 2622
+layout: false
 ---
+<html>
 
-<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
-
-{% demo %}
+<h2 class="text-2xl lg:text-3xl mb-2">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet" />
@@ -673,4 +673,5 @@ slug: 2622
     buildTable();
   </script>
 
-{% enddemo %}
+</body>
+</html>
