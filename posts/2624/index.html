@@ -1,0 +1,401 @@
+﻿---
+title: Science Foundation Ireland Grants Commitments
+author: Manish Datt
+date: '2026-02-24'
+description: Top 10 programmes and research bodies by commitment from 2001 to 2025.
+image: Ireland_grants.png
+categories:
+  - ApacheEcharts
+  - TidyTuesday
+slug: 2624
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFI Grants Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body class="min-h-screen p-8">
+    <div class="w-full mx-auto space-y-8">
+        <h1 class="text-4xl font-bold text-center text-gray-800">Science Foundation Ireland Grants</h1>
+        <p id="classifier-status" class="text-sm text-gray-800 text-center"></p>
+        <div id="grants-table" class="bg-gray-800 rounded-lg shadow-xl overflow-hidden"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+                <h2 class="text-2xl font-semibold mb-3 text-gray-800">Programme Name Summary</h2>
+                <div id="programme-summary-table" class="bg-gray-800 rounded-lg shadow-xl overflow-hidden"></div>
+            </div>
+            <div>
+                <h2 class="text-2xl font-semibold mb-3 text-gray-800">Research Body Summary</h2>
+                <div id="research-body-summary-table" class="bg-gray-800 rounded-lg shadow-xl overflow-hidden"></div>
+            </div>
+            <div>
+                <h2 class="text-2xl font-semibold mb-3 text-gray-800">Broad Category Summary</h2>
+                <div id="category-summary-table" class="bg-gray-800 rounded-lg shadow-xl overflow-hidden"></div>
+            </div>
+        </div>
+
+        <div>
+            <p class="text-lg text-gray-900 mb-2">
+                Broad categories are read from local category CSV files and mapped to: Physics, Chemistry, Biology, Technology, Mathematics, Engineering, Education, Policy, and Others.
+            </p>
+            <h2 class="text-2xl font-semibold mb-3 text-gray-800">Top 10 Programmes and Research Bodies by Commitment (2001–2025 Q1). Grants were assigned to nine categories via AI classification of project titles.</h2>
+            <div id="sankey-chart" class="bg-gray-800 rounded-lg shadow-xl overflow-hidden" style="height: 620px;"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        const Papa = window.Papa;
+        const Tabulator = window.Tabulator;
+
+        const BROAD_CATEGORIES = ["Physics", "Chemistry", "Biology", "Technology", "Mathematics", "Engineering", "Education", "Policy", "Others"];
+        let baseData = [];
+        let currentCategoryMap = new Map();
+        const statusEl = document.getElementById("classifier-status");
+
+        function setStatus(text) {
+            statusEl.textContent = text;
+        }
+
+        function parseCommitment(rawValue) {
+            const parsed = Number(String(rawValue ?? "").replace(/[^0-9.-]/g, ""));
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function formatCommitmentMillions(value) {
+            const millions = (value || 0) / 1000000;
+            return `€${new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(millions)}M`;
+        }
+
+        function buildCountSummary(data, fieldName, labelField) {
+            const counts = {};
+
+            data.forEach((row) => {
+                const key = (row[fieldName] || "").trim() || "(Missing)";
+                counts[key] = (counts[key] || 0) + 1;
+            });
+
+            return Object.entries(counts)
+                .map(([value, count]) => ({ [labelField]: value, count }))
+                .sort((a, b) => b.count - a.count || String(a[labelField]).localeCompare(String(b[labelField])));
+        }
+
+        function buildCommitmentSummary(data, fieldName, labelField) {
+            const totals = {};
+
+            data.forEach((row) => {
+                const key = (row[fieldName] || "").trim() || "(Missing)";
+                totals[key] = (totals[key] || 0) + parseCommitment(row.current_total_commitment);
+            });
+
+            return Object.entries(totals)
+                .map(([value, total_commitment]) => ({ [labelField]: value, total_commitment }))
+                .sort((a, b) => b.total_commitment - a.total_commitment || String(a[labelField]).localeCompare(String(b[labelField])));
+        }
+
+        function getTopValuesByCommitment(data, fieldName, topN) {
+            return buildCommitmentSummary(data, fieldName, fieldName)
+                .slice(0, topN)
+                .map((item) => item[fieldName]);
+        }
+
+        function renderSankey(data) {
+            const topProgrammes = getTopValuesByCommitment(data, "programme_name", 10);
+            const topResearchBodies = getTopValuesByCommitment(data, "research_body", 10);
+            const smallProgrammes = new Set(topProgrammes.slice(-2));
+            const smallResearchBodies = new Set(topResearchBodies.slice(-4));
+            const programmeCommitmentTotals = {};
+            const researchBodyCommitmentTotals = {};
+
+            data.forEach((row) => {
+                const programme = (row.programme_name || "").trim() || "(Missing Programme)";
+                const researchBody = (row.research_body || "").trim() || "(Missing Research Body)";
+                programmeCommitmentTotals[programme] = (programmeCommitmentTotals[programme] || 0) + parseCommitment(row.current_total_commitment);
+                researchBodyCommitmentTotals[researchBody] = (researchBodyCommitmentTotals[researchBody] || 0) + parseCommitment(row.current_total_commitment);
+            });
+
+            const topProgrammeSet = new Set(topProgrammes);
+            const topResearchBodySet = new Set(topResearchBodies);
+
+            const programmeToCategory = {};
+            const categoryToResearchBody = {};
+            const categoryTotalsForPlot = {};
+            const filteredData = data.filter((row) => {
+                const programme = (row.programme_name || "").trim() || "(Missing Programme)";
+                const researchBody = (row.research_body || "").trim() || "(Missing Research Body)";
+                return topProgrammeSet.has(programme) && topResearchBodySet.has(researchBody);
+            });
+
+            filteredData.forEach((row) => {
+                const programme = (row.programme_name || "").trim() || "(Missing Programme)";
+                const category = (row.broad_category || "Others").trim() || "Others";
+                const researchBody = (row.research_body || "").trim() || "(Missing Research Body)";
+                const amount = parseCommitment(row.current_total_commitment);
+
+                const key1 = `${programme}|||${category}`;
+                const key2 = `${category}|||${researchBody}`;
+                programmeToCategory[key1] = (programmeToCategory[key1] || 0) + amount;
+                categoryToResearchBody[key2] = (categoryToResearchBody[key2] || 0) + amount;
+                categoryTotalsForPlot[category] = (categoryTotalsForPlot[category] || 0) + amount;
+            });
+
+            const categoriesInPlot = new Set(Object.keys(categoryTotalsForPlot));
+            const allCategories = buildCommitmentSummary(data, "broad_category", "broad_category")
+                .map((item) => item.broad_category)
+                .filter((category) => categoriesInPlot.has(category));
+
+            const nodes = [
+                ...topProgrammes.map((name) => ({ name: `prog::${name}`, depth: 0 })),
+                ...allCategories.map((name) => ({ name: `cat::${name}`, depth: 1 })),
+                ...topResearchBodies.map((name) => ({ name: `rb::${name}`, depth: 2 }))
+            ];
+
+            const links = [
+                ...Object.entries(programmeToCategory).map(([key, value]) => {
+                    const [programme, category] = key.split("|||");
+                    return {
+                        source: `prog::${programme}`,
+                        target: `cat::${category}`,
+                        value
+                    };
+                }),
+                ...Object.entries(categoryToResearchBody).map(([key, value]) => {
+                    const [category, researchBody] = key.split("|||");
+                    return {
+                        source: `cat::${category}`,
+                        target: `rb::${researchBody}`,
+                        value
+                    };
+                })
+            ]
+                .filter((link) => link.value > 0)
+                .sort((a, b) => b.value - a.value || String(a.source).localeCompare(String(b.source)));
+
+            const chartContainer = document.getElementById("sankey-chart");
+            const sankeyChart = echarts.init(chartContainer);
+            const cleanNodeName = (name) => {
+                const rawName = String(name || "");
+                const baseName = rawName.replace(/^[a-z]+::/i, "");
+                if (rawName.startsWith("prog::")) {
+                    const total = programmeCommitmentTotals[baseName] || 0;
+                    return `${baseName} [${formatCommitmentMillions(total)}]`;
+                }
+                if (rawName.startsWith("rb::")) {
+                    const total = researchBodyCommitmentTotals[baseName] || 0;
+                    return `${baseName} [${formatCommitmentMillions(total)}]`;
+                }
+                return baseName;
+            };
+            sankeyChart.setOption({
+                backgroundColor: "transparent",
+                tooltip: {
+                    trigger: "item",
+                    triggerOn: "mousemove",
+                    formatter: (params) => {
+                        if (params.dataType === "edge") {
+                            return `${cleanNodeName(params.data.source)} -> ${cleanNodeName(params.data.target)}: ${formatCommitmentMillions(params.data.value)}`;
+                        }
+                        return `${cleanNodeName(params.name)}`;
+                    }
+                },
+                series: [
+                    {
+                        type: "sankey",
+                        data: nodes,
+                        links,
+                        left: 20,
+                        right: 20,
+                        top: 20,
+                        bottom: 20,
+                        layoutIterations: 0,
+                        nodeSort: null,
+                        nodeAlign: "left",
+                        emphasis: {
+                            focus: "adjacency"
+                        },
+                        lineStyle: {
+                            color: "gradient",
+                            curveness: 0.5,
+                            opacity: 0.45
+                        },
+                        levels: [
+                            { depth: 0, label: { position: "right" } },
+                            { depth: 1, label: { position: "right" } },
+                            { depth: 2, label: { position: "left" } }
+                        ],
+                        label: {
+                            color: "#e5e7eb",
+                            fontSize: 14,
+                            width: 180,
+                            overflow: "break",
+                            formatter: (node) => {
+                                const rawName = String(node.name || "");
+                                const baseName = rawName.replace(/^[a-z]+::/i, "");
+                                const displayName = cleanNodeName(node.name);
+                                const makeSmall = (rawName.startsWith("prog::") && smallProgrammes.has(baseName))
+                                    || (rawName.startsWith("rb::") && smallResearchBodies.has(baseName));
+                                return makeSmall ? `{small|${displayName}}` : `{normal|${displayName}}`;
+                            },
+                            rich: {
+                                normal: { fontSize: 14, color: "#e5e7eb" },
+                                small: { fontSize: 11, color: "#e5e7eb" }
+                            }
+                        },
+                        nodeGap: 12,
+                        nodeWidth: 14
+                    }
+                ]
+            });
+
+            window.addEventListener("resize", () => sankeyChart.resize());
+        }
+
+        function normalizeGeminiCategory(value) {
+            const raw = String(value || "").trim().toLowerCase();
+            const mapping = {
+                physics: "Physics",
+                chemistry: "Chemistry",
+                biology: "Biology",
+                technology: "Technology",
+                maths: "Mathematics",
+                math: "Mathematics",
+                mathematics: "Mathematics",
+                engineering: "Engineering",
+                education: "Education",
+                policy: "Policy",
+                other: "Others",
+                others: "Others"
+            };
+            return mapping[raw] || "Others";
+        }
+
+        async function loadCategoryMapFromCsvFile(fileName) {
+            try {
+                const response = await fetch(fileName, { cache: "no-store" });
+                if (!response.ok) return null;
+                const csvText = await response.text();
+                const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+                const map = new Map();
+                parsed.data.forEach((row) => {
+                    const title = String(row.title || row.proposal_title || "").trim();
+                    const category = normalizeGeminiCategory(row.category || row.broad_category || "Others");
+                    if (title) map.set(title, category);
+                });
+                return map.size ? map : null;
+            } catch {
+                return null;
+            }
+        }
+
+        function renderAll(data) {
+            new Tabulator("#grants-table", {
+                data,
+                layout: "fitData",
+                pagination: "local",
+                paginationSize: 10,
+                paginationSizeSelector: [10, 20, 50, 100],
+                movableColumns: true,
+                initialSort: [{ column: "start_date", dir: "desc" }],
+                columns: [
+                    { title: "Start Date", field: "start_date", sorter: "date", headerFilter: "input" },
+                    { title: "End Date", field: "end_date", sorter: "date", headerFilter: "input" },
+                    { title: "Proposal ID", field: "proposal_id", headerFilter: "input", width: 120 },
+                    { title: "Programme Name", field: "programme_name", headerFilter: "input", width: 180 },
+                    { title: "Sub Programme", field: "sub_programme", headerFilter: "input" },
+                    { title: "Supplement", field: "supplement", headerFilter: "input" },
+                    { title: "Research Body", field: "research_body", headerFilter: "input", width: 180 },
+                    { title: "Research Body ROR ID", field: "research_body_ror_id", headerFilter: "input", width: 200 },
+                    { title: "Funder Name", field: "funder_name", headerFilter: "input", width: 150 },
+                    { title: "Crossref Funder ID", field: "crossref_funder_registry_id", headerFilter: "input", width: 180 },
+                    { title: "Proposal Title", field: "proposal_title", headerFilter: "input", width: 300 },
+                    { title: "Broad Category", field: "broad_category", headerFilter: "input", width: 180 },
+                    { title: "Total Commitment", field: "current_total_commitment", sorter: "number", formatter: "money", formatterParams: { symbol: "&#8364;", decimal: ".", thousand: ",", symbolAfter: false }, headerFilter: "number" }
+                ]
+            });
+
+            const programmeSummary = buildCommitmentSummary(data, "programme_name", "programme_name");
+            const researchBodySummary = buildCommitmentSummary(data, "research_body", "research_body");
+            const categorySummary = buildCommitmentSummary(data, "broad_category", "broad_category");
+
+            new Tabulator("#programme-summary-table", {
+                data: programmeSummary,
+                layout: "fitColumns",
+                height: "420px",
+                initialSort: [{ column: "total_commitment", dir: "desc" }],
+                columns: [
+                    { title: "Programme Name", field: "programme_name", headerFilter: "input" },
+                    { title: "Total Commitment", field: "total_commitment", sorter: "number", hozAlign: "right", width: 180, formatter: "money", formatterParams: { symbol: "&#8364;", decimal: ".", thousand: ",", symbolAfter: false } }
+                ]
+            });
+
+            new Tabulator("#research-body-summary-table", {
+                data: researchBodySummary,
+                layout: "fitColumns",
+                height: "420px",
+                initialSort: [{ column: "total_commitment", dir: "desc" }],
+                columns: [
+                    { title: "Research Body", field: "research_body", headerFilter: "input" },
+                    { title: "Total Commitment", field: "total_commitment", sorter: "number", hozAlign: "right", width: 180, formatter: "money", formatterParams: { symbol: "&#8364;", decimal: ".", thousand: ",", symbolAfter: false } }
+                ]
+            });
+
+            new Tabulator("#category-summary-table", {
+                data: categorySummary,
+                layout: "fitColumns",
+                initialSort: [{ column: "total_commitment", dir: "desc" }],
+                columns: [
+                    { title: "Broad Category", field: "broad_category", headerFilter: "input" },
+                    { title: "Total Commitment", field: "total_commitment", sorter: "number", hozAlign: "right", width: 180, formatter: "money", formatterParams: { symbol: "&#8364;", decimal: ".", thousand: ",", symbolAfter: false } }
+                ]
+            });
+
+            renderSankey(data);
+        }
+
+        function applyCategoryMap(data, titleToCategory) {
+            return data.map((row) => {
+                const title = String(row.proposal_title || "").trim();
+                return { ...row, broad_category: titleToCategory.get(title) || "Others" };
+            });
+        }
+
+        async function init() {
+            try {
+                const response = await fetch("sfi_grants.csv");
+                const csvText = await response.text();
+                const result = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+                baseData = result.data;
+
+                const titlesOnlyMap = await loadCategoryMapFromCsvFile("titles_only.csv");
+                const fileMap = titlesOnlyMap || await loadCategoryMapFromCsvFile("title_categories.csv");
+                const isAllOthers = (map) => map.size > 0 && [...map.values()].every((v) => String(v || "").trim() === "Others");
+                currentCategoryMap = (fileMap && !isAllOthers(fileMap)) ? fileMap : new Map();
+
+                renderAll(applyCategoryMap(baseData, currentCategoryMap));
+
+                if (fileMap && isAllOthers(fileMap)) {
+                    setStatus("Category file found but all values are 'Others'. Please provide an updated category CSV.");
+                }
+            } catch (error) {
+                console.error("Error loading CSV:", error);
+                document.getElementById("grants-table").innerHTML = '<p class="text-red-500 p-4">Error loading data. Please try again.</p>';
+                setStatus("Failed to load data.");
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+{% enddemo %}
