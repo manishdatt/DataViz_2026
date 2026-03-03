@@ -1,0 +1,598 @@
+---
+title: Golem Grad Tortoise Data
+author: Manish Datt
+date: '2026-03-03'
+description: Distribution of clutch size and body condition index.
+image: Tortoise_clutch.png
+categories:
+  - ApacheEcharts
+  - TidyTuesday
+layout: layouts/base-min.njk
+slug: 2631
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TidyTuesday 2026-03-03 Tables</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/simple-datatables@9.0.3/dist/style.css"
+    />
+
+    <style>
+      body {
+        background: radial-gradient(circle at top, #f0f9ff 0%, #e2e8f0 45%, #f8fafc 100%);
+      }
+
+      .table-wrap {
+        min-height: 340px;
+        overflow-x: auto;
+      }
+
+      .datatable-wrapper .datatable-top,
+      .datatable-wrapper .datatable-bottom {
+        padding: 0.75rem 0;
+      }
+
+      .datatable-wrapper .datatable-selector,
+      .datatable-wrapper .datatable-input {
+        border: 1px solid #cbd5e1;
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.5rem;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-900">
+    <main class="mx-auto max-w-7xl">
+      <section class="grid gap-8">
+        <article class="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur">
+          <h2 class="mb-4 text-xl font-semibold">Clutch Size Cleaned</h2>
+          <div id="clutch-table" class="table-wrap"></div>
+        </article>
+
+        <article class="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur">
+          <h2 class="mb-4 text-xl font-semibold">Tortoise Body Condition Cleaned</h2>
+          <div id="body-condition-table" class="table-wrap"></div>
+        </article>
+
+        <article class="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur">
+          <h2 class="mb-4 text-xl font-semibold">Body Condition Index Timeline (By Individual)</h2>
+          <div id="bci-timeline" class="h-[520px] w-full"></div>
+        </article>
+
+        <article class="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur">
+          <h2 class="mb-4 pl-4 text-xl font-semibold">Temporal distribution of clutch size by age and locality.</h2>
+          <div id="clutch-parallel" style="height: 520px; width: 100%;"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-datatables@9.0.3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script>
+      const CSV_SOURCES = {
+        clutch: {
+          local: "clutch_size_cleaned.csv",
+          remote:
+            "https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-03-03/clutch_size_cleaned.csv",
+        },
+        body: {
+          local: "tortoise_body_condition_cleaned.csv",
+          remote:
+            "https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-03-03/tortoise_body_condition_cleaned.csv",
+        },
+      };
+
+      function loadCsv(url) {
+        return new Promise((resolve, reject) => {
+          Papa.parse(url, {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              if (results.errors && results.errors.length > 0) {
+                reject(new Error(`CSV parse error: ${results.errors[0].message}`));
+                return;
+              }
+              const fields = Array.isArray(results.meta.fields) ? results.meta.fields : [];
+              resolve({ data: results.data || [], fields });
+            },
+            error: (err) => reject(new Error(`CSV download failed: ${err.message || err}`)),
+          });
+        });
+      }
+
+      async function loadCsvWithFallback(source) {
+        try {
+          return await loadCsv(source.local);
+        } catch {
+          return loadCsv(source.remote);
+        }
+      }
+
+      function toTitle(fieldName) {
+        return String(fieldName)
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (ch) => ch.toUpperCase());
+      }
+
+      function buildColumns(fields, data) {
+        let effectiveFields = Array.isArray(fields) ? [...fields] : [];
+        if (effectiveFields.length === 0 && Array.isArray(data)) {
+          const keySet = new Set();
+          data.slice(0, 25).forEach((row) => {
+            if (row && typeof row === "object") {
+              Object.keys(row).forEach((key) => keySet.add(key));
+            }
+          });
+          effectiveFields = [...keySet];
+        }
+
+        return effectiveFields
+          .filter((field) => field && field !== "__parsed_extra")
+          .map((field) => ({
+            accessorKey: field,
+            header: toTitle(field),
+          }));
+      }
+
+      function showError(selector, message) {
+        const target = document.querySelector(selector);
+        if (!target) {
+          return;
+        }
+        target.innerHTML = `<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">${message}</div>`;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function makeTable(selector, tableId, data, fields) {
+        const target = document.querySelector(selector);
+        if (!target) {
+          return;
+        }
+
+        const columns = buildColumns(fields, data);
+        const headerHtml = columns
+          .map(
+            (column) =>
+              `<th class="whitespace-nowrap border-b border-slate-200 bg-slate-100 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-700">${escapeHtml(column.header)}</th>`
+          )
+          .join("");
+
+        const rowHtml = data
+          .map(
+            (row) => `
+              <tr class="odd:bg-white even:bg-slate-50/70">
+                ${columns
+                  .map(
+                    (column) =>
+                      `<td class="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-sm text-slate-800">${escapeHtml(row[column.accessorKey])}</td>`
+                  )
+                  .join("")}
+              </tr>
+            `
+          )
+          .join("");
+
+        target.innerHTML = `
+          <table id="${tableId}" class="min-w-full border border-slate-200 text-sm">
+            <thead><tr>${headerHtml}</tr></thead>
+            <tbody>${rowHtml}</tbody>
+          </table>
+        `;
+
+        const tableEl = target.querySelector(`#${tableId}`);
+        new simpleDatatables.DataTable(tableEl, {
+          perPage: 10,
+          perPageSelect: [10, 25, 50],
+          searchable: true,
+          fixedHeight: false,
+        });
+      }
+
+function renderBciTimeline(data) {
+        const target = document.querySelector("#bci-timeline");
+        if (!target) {
+          return;
+        }
+
+        const grouped = new Map();
+        const sexColors = {
+          m: "dodgerblue",
+          f: "salmon",
+          u: "#64748b",
+        };
+
+        data.forEach((row) => {
+          const id = row.individual;
+          const year = Number(row.year);
+          const bci = Number(row.body_condition_index);
+          const sex = String(row.sex ?? "u").toLowerCase();
+          const locality = String(row.locality ?? "Unknown");
+          if (id === null || id === undefined || !Number.isFinite(year) || !Number.isFinite(bci)) {
+            return;
+          }
+
+          const key = String(id);
+          if (!grouped.has(key)) {
+            grouped.set(key, { sex, locality, points: [] });
+          }
+          grouped.get(key).points.push([year, bci]);
+        });
+
+        if (grouped.size === 0) {
+          showError("#bci-timeline", "No valid rows for timeline.");
+          return;
+        }
+        const locations = [...new Set([...grouped.values()].map((item) => item.locality))].sort();
+
+        function buildSeries(selectedLocations, selectedSexes) {
+          return [...grouped.entries()]
+            .filter(
+              ([, item]) => selectedLocations.has(item.locality) && selectedSexes.has(item.sex)
+            )
+            .map(([id, item]) => ({
+              name: `ID ${id}`,
+              type: "line",
+              showSymbol: false,
+              lineStyle: { width: 1.2, color: sexColors[item.sex] || sexColors.u, opacity: 0.7 },
+              itemStyle: { color: sexColors[item.sex] || sexColors.u, opacity: 0.7 },
+              data: item.points.sort((a, b) => a[0] - b[0]),
+            }));
+        }
+
+        const locationFiltersHtml = locations
+          .map(
+            (locality) => `
+              <label class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
+                <input type="checkbox" data-role="loc-filter" data-location="${encodeURIComponent(locality)}" checked />
+                <span>${escapeHtml(locality)}</span>
+              </label>
+            `
+          )
+          .join("");
+        const sexFiltersHtml = [
+          { key: "m", label: "Male" },
+          { key: "f", label: "Female" },
+        ]
+          .map(
+            (entry) => `
+              <label class="inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-semibold" style="border-color:${sexColors[entry.key]}; color:${sexColors[entry.key]}; background:${sexColors[entry.key]}1A;">
+                <input type="checkbox" data-role="sex-filter" data-sex="${entry.key}" checked />
+                <span>${entry.label}</span>
+              </label>
+            `
+          )
+          .join("");
+
+        target.innerHTML = `
+          <div class="mb-0 flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+            <label class="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
+              <input id="loc-all" type="checkbox" checked />
+              <span>All</span>
+            </label>
+            ${locationFiltersHtml}
+            ${sexFiltersHtml}
+          </div>
+          <div id="bci-chart-canvas" style="height: 480px; width: 100%;"></div>
+        `;
+
+        const chartContainer = target.querySelector("#bci-chart-canvas");
+        if (!chartContainer) {
+          showError("#bci-timeline", "Chart container was not created.");
+          return;
+        }
+
+        const chart = echarts.init(chartContainer);
+        const allCheckbox = target.querySelector("#loc-all");
+        const locationCheckboxes = [...target.querySelectorAll('input[data-role="loc-filter"]')];
+        const sexCheckboxes = [...target.querySelectorAll('input[data-role="sex-filter"]')];
+
+        function getSelectedLocations() {
+          return new Set(
+            locationCheckboxes
+              .filter((checkbox) => checkbox.checked)
+              .map((checkbox) => decodeURIComponent(checkbox.dataset.location || ""))
+          );
+        }
+        function getSelectedSexes() {
+          return new Set(
+            sexCheckboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.dataset.sex)
+          );
+        }
+
+        function syncAllCheckbox() {
+          const checkedCount = locationCheckboxes.filter((checkbox) => checkbox.checked).length;
+          allCheckbox.checked = checkedCount === locationCheckboxes.length;
+        }
+
+        function updateSeries() {
+          const selectedLocations = getSelectedLocations();
+          const selectedSexes = getSelectedSexes();
+          const filteredSeries = buildSeries(selectedLocations, selectedSexes);
+          chart.setOption(
+            {
+              series: filteredSeries,
+              graphic:
+                filteredSeries.length === 0
+                  ? [
+                      {
+                        type: "text",
+                        left: "center",
+                        top: "middle",
+                        style: { text: "No data for selected filters", fill: "#64748b", fontSize: 14 },
+                      },
+                    ]
+                  : [],
+            },
+            {
+              replaceMerge: ["series", "graphic"],
+            }
+          );
+        }
+
+        chart.setOption({
+          animation: false,
+          tooltip: {
+            trigger: "axis",
+            textStyle: { fontSize: 14 },
+          },
+          legend: { show: false },
+          grid: { left: 64, right: 24, top: 68, bottom: 84 },
+          xAxis: {
+            type: "value",
+            nameLocation: "middle",
+            nameGap: 34,
+            min: "dataMin",
+            max: "dataMax",
+            axisLabel: { formatter: (value) => `${Math.trunc(value)}`, fontSize: 14 },
+            nameTextStyle: { fontSize: 16 },
+            splitLine: { show: false },
+          },
+          yAxis: {
+            type: "value",
+            name: "Body Condition Index",
+            nameLocation: "middle",
+            nameGap: 46,
+            min: 2,
+            axisLabel: { fontSize: 14 },
+            nameTextStyle: { fontSize: 16 },
+          },
+          dataZoom: [
+            { type: "inside", xAxisIndex: 0 },
+            { type: "slider", xAxisIndex: 0, bottom: 30 },
+          ],
+          series: buildSeries(new Set(locations), new Set(["m", "f"])),
+        });
+
+        allCheckbox.addEventListener("change", () => {
+          locationCheckboxes.forEach((checkbox) => {
+            checkbox.checked = allCheckbox.checked;
+          });
+          updateSeries();
+        });
+
+        locationCheckboxes.forEach((checkbox) => {
+          checkbox.addEventListener("change", () => {
+            syncAllCheckbox();
+            updateSeries();
+          });
+        });
+        sexCheckboxes.forEach((checkbox) => {
+          checkbox.addEventListener("change", () => {
+            updateSeries();
+          });
+        });
+
+        window.addEventListener("resize", () => chart.resize());
+      }
+
+      function renderClutchParallel(data) {
+        const target = document.querySelector("#clutch-parallel");
+        if (!target) {
+          return;
+        }
+
+        const firstByIndividual = new Map();
+        data.forEach((row) => {
+          const id = Number(row.individual);
+          if (!Number.isFinite(id) || firstByIndividual.has(id)) {
+            return;
+          }
+
+          const age = Number(row.age);
+          const eggs = Number(row.eggs);
+          const locality = String(row.locality ?? "Unknown");
+          const year = Number(String(row.date ?? "").slice(0, 4));
+          if (!Number.isFinite(age) || !Number.isFinite(eggs) || !Number.isFinite(year)) {
+            return;
+          }
+
+          firstByIndividual.set(id, {
+            year,
+            age,
+            locality,
+            eggs,
+          });
+        });
+
+        const uniqueRows = [...firstByIndividual.values()];
+        if (uniqueRows.length === 0) {
+          showError("#clutch-parallel", "No valid rows for clutch parallel plot.");
+          return;
+        }
+        const eggsValues = uniqueRows.map((row) => row.eggs).filter((v) => Number.isFinite(v));
+        const eggsMin = Math.min(...eggsValues);
+        const eggsMax = Math.max(...eggsValues);
+
+        const yearList = [...new Set(uniqueRows.map((row) => row.year))].sort((a, b) => a - b);
+        const yearToIndex = new Map(yearList.map((value, index) => [value, index]));
+        const localitySet = new Set(uniqueRows.map((row) => row.locality));
+        const preferredOrder = ["Beach", "Plateau", "Konjsko"];
+        const localityList = [
+          ...preferredOrder.filter((name) =>
+            [...localitySet].some((loc) => String(loc).toLowerCase() === name.toLowerCase())
+          ),
+          ...[...localitySet].filter(
+            (loc) => !preferredOrder.some((name) => name.toLowerCase() === String(loc).toLowerCase())
+          ),
+        ];
+        const localityToIndex = new Map(localityList.map((value, index) => [value, index]));
+
+        const parallelData = uniqueRows.map((row) => [
+          yearToIndex.get(row.year),
+          row.age,
+          localityToIndex.get(row.locality),
+          row.eggs,
+        ]);
+
+        const chart = echarts.init(target);
+        chart.setOption({
+          animation: false,
+          tooltip: {
+            trigger: "item",
+            textStyle: { fontSize: 14 },
+            formatter: (params) => {
+              const v = params.value;
+              const year = yearList[v[0]] ?? "";
+              const locality = localityList[v[2]] ?? "Unknown";
+              return `Year: ${year}<br/>Age: ${v[1]}<br/>Locality: ${locality}<br/>Eggs: ${v[3]}`;
+            },
+          },
+          parallel: {
+            left: 56,
+            right: 56,
+            top: 40,
+            bottom: 40,
+            parallelAxisDefault: {
+              type: "value",
+              nameLocation: "end",
+              nameGap: 14,
+              splitNumber: 4,
+              axisLabel: {
+                fontSize: 14,
+              },
+              nameTextStyle: {
+                fontSize: 15,
+                fontWeight: "bold",
+              },
+            },
+          },
+          parallelAxis: [
+            {
+              dim: 0,
+              name: "Year",
+              min: 0,
+              max: Math.max(0, yearList.length - 1),
+              interval: 1,
+              axisLabel: {
+                formatter: (value) => yearList[Math.round(value)] ?? "",
+                align: "right",
+                margin: 0,
+                fontSize: 14,
+              },
+            },
+            { dim: 1, name: "Age", min: 10 },
+            {
+              dim: 2,
+              name: "Locality",
+              min: 0,
+              max: Math.max(0, localityList.length - 1),
+              interval: 1,
+              axisLabel: {
+                formatter: (value) => localityList[Math.round(value)] ?? "",
+                fontSize: 14,
+                verticalAlign: "top",
+                padding: [-12, 0, 0, 0],
+                margin: 0,
+              },
+            },
+            { dim: 3, name: "Eggs", min: eggsMin, max: eggsMax },
+          ],
+          visualMap: {
+            show: false,
+            dimension: 3,
+            orient: "horizontal",
+            left: "center",
+            bottom: 0,
+            pieces: [
+              { lte: 5, label: "Eggs <= 5", color: "dodgerblue" },
+              { gt: 5, label: "Eggs > 5", color: "salmon" },
+            ],
+            textStyle: { color: "#334155", fontSize: 13 },
+          },
+          graphic: [
+            {
+              type: "text",
+              right: 120,
+              top: 90,
+              style: {
+                text: "Clutch size > 5",
+                fill: "salmon",
+                fontSize: 14,
+              },
+            },
+          ],
+          series: [
+            {
+              type: "parallel",
+              smooth: 0.15,
+              lineStyle: {
+                width: 2.0,
+                opacity: 0.5,
+              },
+              data: parallelData,
+            },
+          ],
+        });
+
+        window.addEventListener("resize", () => chart.resize());
+      }
+
+      async function renderTables() {
+        try {
+          const [clutchCsv, bodyConditionCsv] = await Promise.all([
+            loadCsvWithFallback(CSV_SOURCES.clutch),
+            loadCsvWithFallback(CSV_SOURCES.body),
+          ]);
+
+          makeTable("#clutch-table", "clutch-datatable", clutchCsv.data, clutchCsv.fields);
+          makeTable(
+            "#body-condition-table",
+            "body-condition-datatable",
+            bodyConditionCsv.data,
+            bodyConditionCsv.fields
+          );
+          renderBciTimeline(bodyConditionCsv.data);
+          renderClutchParallel(clutchCsv.data);
+        } catch (error) {
+          console.error(error);
+          showError("#clutch-table", `Failed to render table: ${error.message}`);
+          showError("#body-condition-table", `Failed to render table: ${error.message}`);
+          showError("#bci-timeline", `Failed to render timeline: ${error.message}`);
+          showError("#clutch-parallel", `Failed to render parallel plot: ${error.message}`);
+        }
+      }
+
+      renderTables();
+    </script>
+  </body>
+
+{% enddemo %}
