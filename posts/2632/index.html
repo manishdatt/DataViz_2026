@@ -1,0 +1,631 @@
+---
+title: How likely is 'likely'?
+author: Manish Datt
+date: '2026-03-10'
+description: Pairwise preferences for probability phrases.
+image: likely_heatmap.png
+categories:
+  - ApacheEcharts
+  - TidyTuesday
+slug: 2632
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pairwise Comparisons</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tabulator CSS -->
+    <link href="https://unpkg.com/tabulator-tables@6.0.0/dist/css/tabulator.min.css" rel="stylesheet">
+    
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <h1 class="text-3xl font-bold text-gray-900">Pairwise Comparisons</h1>
+            </div>
+            
+            <div class="p-6">
+                <div id="table" class="border border-gray-200 rounded-lg overflow-hidden"></div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow mt-8">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-900">Selection Frequency Matrix</h2>
+                <p class="text-gray-600 mt-2">Counts of selections for each term1-term2 pair</p>
+            </div>
+            
+            <div class="p-6">
+                <div id="pivotTable" class="border border-gray-200 rounded-lg overflow-hidden"></div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow mt-8">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-900">Reverse Pair Selection Frequency Matrix</h2>
+                <p class="text-gray-600 mt-2">Counts of selections for reverse pairs (term2-term1)</p>
+            </div>
+            
+            <div class="p-6">
+                <div id="reversePivotTable" class="border border-gray-200 rounded-lg overflow-hidden"></div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow mt-8">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-900">Selection Frequency Heatmaps</h2>
+            </div>
+            
+            <div class="p-6 space-y-8">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Forward Pairs (term1 selected)</h3>
+                        <div id="heatmapForward" style="width: 100%; height: 600px;"></div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Reverse Pairs (term1 selected when paired as term2, term1)</h3>
+                        <div id="heatmapReverse" style="width: 100%; height: 600px;"></div>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <h3 class="text-2xl font-semibold text-gray-900 mb-0">Pairwise preferences for probability phrases for <span class="text-green-600">Term1</span> and <span class="text-blue-600">Term2</span></h3>
+                    <p class="text-gray-900 text-xl">"Almost No Chance" and "Will Happen" lie at the opposite ends of the spectrum</p>
+                    <div id="heatmapCombined" style="width: 750px; height: 750px; margin: 0 auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabulator JS -->
+    <script src="https://unpkg.com/tabulator-tables@6.0.0/dist/js/tabulator.min.js"></script>
+    
+    <!-- Papa Parse for CSV parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    
+    <script>
+        // Load and parse CSV file
+        fetch("pairwise_comparisons.csv")
+            .then(response => response.text())
+            .then(csvText => {
+                // Parse CSV using Papa Parse
+                const data = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true
+                });
+                
+                // Create Tabulator table with parsed data
+                const table = new Tabulator("#table", {
+                    data: data.data,
+                    layout: "fitData",
+                    responsiveLayout: "collapse",
+                    pagination: "local",
+                    paginationSize: 10,
+                    columns: [
+                        { title: "Response ID", field: "response_id", width: 120, headerFilter: "input" },
+                        { title: "Pair ID", field: "pair_id", width: 100, headerFilter: "input" },
+                        { title: "Term 1", field: "term1", width: 180, headerFilter: "input" },
+                        { title: "Term 2", field: "term2", width: 180, headerFilter: "input" },
+                        { title: "Selected", field: "selected", width: 180, headerFilter: "input" }
+                    ]
+                });
+                
+                // Create pivot table using vanilla JavaScript
+                
+                // Get unique values and sort them for consistent ordering
+                const uniqueTerm1 = [...new Set(data.data.map(row => row.term1))].sort();
+                const uniqueTerm2 = [...new Set(data.data.map(row => row.term2))].sort();
+                
+                // Create a total count matrix (all occurrences of each pair, regardless of selection)
+                const totalCountData = [];
+                uniqueTerm1.forEach(t1 => {
+                    const row = {};
+                    uniqueTerm2.forEach(t2 => {
+                        const count = data.data.filter(d => d.term1 === t1 && d.term2 === t2).length;
+                        row[t2] = count;
+                    });
+                    totalCountData.push(row);
+                });
+                
+                // Create pivot table - count how many times term1 was selected in term1-term2 pairs
+                const pivotData = [];
+                uniqueTerm1.forEach(t1 => {
+                    const row = { term: t1 };
+                    uniqueTerm2.forEach(t2 => {
+                        if (t1 === t2) {
+                            row[t2] = 0;  // Diagonal is always 0
+                        } else {
+                            const count = data.data.filter(d => d.term1 === t1 && d.term2 === t2 && d.selected === t1).length;
+                            row[t2] = count > 0 ? count : 0;
+                        }
+                    });
+                    pivotData.push(row);
+                });
+                
+                // Create columns for pivot table
+                const pivotColumns = [
+                    { title: "Term", field: "term", width: 180, frozen: true }
+                ];
+                uniqueTerm2.forEach(t2 => {
+                    pivotColumns.push({ title: t2, field: t2, width: 100, align: "center" });
+                });
+                
+                // Create pivot table
+                const pivotTable = new Tabulator("#pivotTable", {
+                    data: pivotData,
+                    layout: "fitData",
+                    columns: pivotColumns
+                });
+                
+                // Create reverse pivot table - count how many times term1 was selected in reverse pairs (term2, term1)
+                const reversePivotData = [];
+                uniqueTerm1.forEach(t1 => {
+                    const row = { term: t1 };
+                    uniqueTerm2.forEach(t2 => {
+                        if (t1 === t2) {
+                            row[t2] = 0;  // Diagonal is always 0
+                        } else {
+                            // Count cases where the pair is (t2, t1) and t1 was selected
+                            const count = data.data.filter(d => d.term1 === t2 && d.term2 === t1 && d.selected === t1).length;
+                            row[t2] = count > 0 ? count : 0;
+                        }
+                    });
+                    reversePivotData.push(row);
+                });
+                
+                // Create columns for reverse pivot table
+                const reversePivotColumns = [
+                    { title: "Term", field: "term", width: 180, frozen: true }
+                ];
+                uniqueTerm2.forEach(t2 => {
+                    reversePivotColumns.push({ title: t2, field: t2, width: 100, align: "center" });
+                });
+                
+                // Create reverse pivot table
+                const reversePivotTable = new Tabulator("#reversePivotTable", {
+                    data: reversePivotData,
+                    layout: "fitData",
+                    columns: reversePivotColumns
+                });
+                
+                // Create heatmap data for forward pairs with percentages
+                const heatmapForwardData = [];
+                uniqueTerm1.forEach((t1, i) => {
+                    uniqueTerm2.forEach((t2, j) => {
+                        const forwardCount = pivotData[i][t2];
+                        const total = totalCountData[i][t2];
+                        const percentage = total > 0 ? (forwardCount / total * 100).toFixed(1) : 0;
+                        heatmapForwardData.push({
+                            value: [j, i, percentage],
+                            forwardCount: forwardCount,
+                            total: total
+                        });
+                    });
+                });
+                
+                // Create heatmap data for reverse pairs with percentages
+                const heatmapReverseData = [];
+                uniqueTerm1.forEach((t1, i) => {
+                    uniqueTerm2.forEach((t2, j) => {
+                        const reverseCount = reversePivotData[i][t2];
+                        // For reverse pairs, the total should be the count of pairs (t2, t1), not (t1, t2)
+                        const total = totalCountData[j] && totalCountData[j][t1] ? totalCountData[j][t1] : 0;
+                        const percentage = total > 0 ? (reverseCount / total * 100).toFixed(1) : 0;
+                        heatmapReverseData.push({
+                            value: [j, i, percentage],
+                            reverseCount: reverseCount,
+                            total: total
+                        });
+                    });
+                });
+                
+                // Get max value for color scale (now using percentages)
+                const allValues = [...heatmapForwardData, ...heatmapReverseData].map(d => d.value[2]);
+                const maxValue = 100;
+                
+                // Initialize forward heatmap
+                const chartForward = echarts.init(document.getElementById('heatmapForward'));
+                const optionForward = {
+                    title: {
+                        text: 'Forward Pairs Heatmap'
+                    },
+                    tooltip: {
+                        position: 'top',
+                        formatter: function(params) {
+                            if (params.componentSubType === 'heatmap') {
+                                const data = heatmapForwardData[params.dataIndex];
+                                return `${uniqueTerm1[params.value[1]]} - ${uniqueTerm2[params.value[0]]}<br/>Forward: ${data.forwardCount}/${data.total} (${data.value[2]})`;
+                            }
+                            return '';
+                        }
+                    },
+                    grid: {
+                        height: '80%',
+                        top: 10,
+                        left: 120,
+                        bottom: 0
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: uniqueTerm2,
+                        splitArea: {
+                            show: true
+                        },
+                        axisLabel: {
+                            rotate: 45,
+                            interval: 0
+                        }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: uniqueTerm1,
+                        splitArea: {
+                            show: true
+                        }
+                    },
+                    visualMap: {
+                        min: 0,
+                        max: 100,
+                        calculable: true,
+                        orient: 'vertical',
+                        right: '10',
+                        inRange: {
+                            color: ['#f0f0f0', '#2ca02c', '#1f77b4']
+                        }
+                    },
+                    series: [
+                        {
+                            name: 'Percentage',
+                            type: 'heatmap',
+                            data: heatmapForwardData.map(d => d.value),
+                            label: {
+                                show: true,
+                                color: '#000',
+                                formatter: function(params) {
+                                    const value = params.value[2];
+                                    return value === '100.0' ? '100' : value;
+                                }
+                            },
+                            emphasis: {
+                                itemStyle: {
+                                    borderColor: '#333',
+                                    borderWidth: 1
+                                }
+                            }
+                        }
+                    ]
+                };
+                chartForward.setOption(optionForward);
+                
+                // Initialize reverse heatmap
+                const chartReverse = echarts.init(document.getElementById('heatmapReverse'));
+                const optionReverse = {
+                    title: {
+                        text: 'Reverse Pairs Heatmap'
+                    },
+                    tooltip: {
+                        position: 'top',
+                        formatter: function(params) {
+                            if (params.componentSubType === 'heatmap') {
+                                const data = heatmapReverseData[params.dataIndex];
+                                return `${uniqueTerm2[params.value[0]]} - ${uniqueTerm1[params.value[1]]}<br/>Reverse: ${data.reverseCount}/${data.total} (${data.value[2]})`;
+                            }
+                            return '';
+                        }
+                    },
+                    grid: {
+                        height: '80%',
+                        top: 30
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: uniqueTerm2,
+                        splitArea: {
+                            show: true
+                        },
+                        axisLabel: {
+                            rotate: 45,
+                            interval: 0
+                        }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: uniqueTerm1,
+                        splitArea: {
+                            show: true
+                        },
+                        axisLabel: {
+                            show: false
+                        },
+                        axisLine: {
+                            show: false
+                        }
+                    },
+                    visualMap: {
+                        min: 0,
+                        max: 100,
+                        calculable: true,
+                        orient: 'vertical',
+                        right: '10',
+                        inRange: {
+                            color: ['#f0f0f0', '#2ca02c', '#1f77b4']
+                        }
+                    },
+                    series: [
+                        {
+                            name: 'Percentage',
+                            type: 'heatmap',
+                            data: heatmapReverseData.map(d => d.value),
+                            label: {
+                                show: true,
+                                color: '#000',
+                                formatter: function(params) {
+                                    const value = params.value[2];
+                                    return value === '100.0' ? '100' : value;
+                                }
+                            },
+                            emphasis: {
+                                itemStyle: {
+                                    borderColor: '#333',
+                                    borderWidth: 1
+                                }
+                            }
+                        }
+                    ]
+                };
+                chartReverse.setOption(optionReverse);
+                
+                // Create combined heatmap data (sum of forward and reverse)
+                const heatmapCombinedData = [];
+                uniqueTerm1.forEach((t1, i) => {
+                    uniqueTerm2.forEach((t2, j) => {
+                        const forwardCount = pivotData[i][t2];
+                        const reverseCount = reversePivotData[i][t2];
+                        const totalForward = totalCountData[i] && totalCountData[i][t2] ? totalCountData[i][t2] : 0;
+                        const totalReverse = totalCountData[j] && totalCountData[j][t1] ? totalCountData[j][t1] : 0;
+                        const totalCombined = totalForward + totalReverse;
+                        const combinedCount = forwardCount + reverseCount;
+                        const percentage = totalCombined > 0 ? (combinedCount / totalCombined * 100).toFixed(1) : 0;
+                        heatmapCombinedData.push({
+                            value: [j, i, percentage],
+                            forwardCount: forwardCount,
+                            reverseCount: reverseCount,
+                            totalCount: combinedCount,
+                            totalPairs: totalCombined
+                        });
+                    });
+                });
+                
+                // Initialize combined heatmap
+                const chartCombined = echarts.init(document.getElementById('heatmapCombined'));
+                const optionCombined = {
+                    tooltip: {
+                        position: 'top',
+                        formatter: function(params) {
+                            if (params.componentSubType === 'heatmap') {
+                                const data = heatmapCombinedData[params.dataIndex];
+                                return `${uniqueTerm1[params.value[1]]} - ${uniqueTerm2[params.value[0]]}<br/>Forward: ${data.forwardCount}<br/>Reverse: ${data.reverseCount}<br/>Total: ${data.totalCount}/${data.totalPairs} (${data.value[2]})`;
+                            }
+                            return '';
+                        }
+                    },
+                    grid: {
+                        height: '80%',
+                        width: '80%',
+                        top: 30,
+                        left: 120,
+                        bottom: 50
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: uniqueTerm2,
+                        splitArea: {
+                            show: true
+                        },
+                        axisLine: {
+                            show: false
+                        },
+                        axisTick: {
+                            show: false
+                        },
+                        axisLabel: {
+                            rotate: 45,
+                            interval: 0,
+                            color: '#2563eb'
+                        }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: uniqueTerm1,
+                        splitArea: {
+                            show: true
+                        },
+                        inverse: true,
+                        axisLine: {
+                            show: false
+                        },
+                        axisTick: {
+                            show: false
+                        },
+                        axisLabel: {
+                            color: '#16a34a'
+                        }
+                    },
+
+                    series: [
+                        {
+                            name: 'Percentage',
+                            type: 'heatmap',
+                            data: heatmapCombinedData.map((d, idx) => {
+                                const j = d.value[0];
+                                const i = d.value[1];
+                                const value = parseFloat(d.value[2]);
+                                
+                                // Function to interpolate color
+                                const hexToRgb = (hex) => {
+                                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                                    return result ? {
+                                        r: parseInt(result[1], 16),
+                                        g: parseInt(result[2], 16),
+                                        b: parseInt(result[3], 16)
+                                    } : null;
+                                };
+                                
+                                const rgbToHex = (r, g, b) => {
+                                    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                                };
+                                
+                                const interpolateColor = (start, end, factor) => {
+                                    const startRgb = hexToRgb(start);
+                                    const endRgb = hexToRgb(end);
+                                    const r = Math.round(startRgb.r + (endRgb.r - startRgb.r) * factor);
+                                    const g = Math.round(startRgb.g + (endRgb.g - startRgb.g) * factor);
+                                    const b = Math.round(startRgb.b + (endRgb.b - startRgb.b) * factor);
+                                    return rgbToHex(r, g, b);
+                                };
+                                
+                                let color;
+                                const factor = value / 100; // Normalize to 0-1
+                                
+                                if (j < i) {
+                                    // Lower triangle: white to green
+                                    color = interpolateColor('#f0fdf4', '#86efac', factor);
+                                } else if (j > i) {
+                                    // Upper triangle: white to blue
+                                    color = interpolateColor('#eff6ff', '#93c5fd', factor);
+                                } else {
+                                    // Diagonal: white
+                                    color = '#ffffff';
+                                }
+                                
+                                return {
+                                    value: i === j ? [d.value[0], d.value[1], ''] : d.value,
+                                    itemStyle: {
+                                        color: color
+                                    }
+                                };
+                            }),
+                            label: {
+                                show: true,
+                                color: '#000',
+                                formatter: function(params) {
+                                    const value = params.value[2];
+                                    return value === '100.0' ? '100' : value;
+                                }
+                            },
+                            emphasis: {
+                                itemStyle: {
+                                    borderColor: '#333',
+                                    borderWidth: 1
+                                }
+                            }
+                        }
+                    ]
+                };
+                chartCombined.setOption(optionCombined);
+                
+                // Handle window resize
+                window.addEventListener('resize', function() {
+                    chartForward.resize();
+                    chartReverse.resize();
+                    chartCombined.resize();
+                });
+            })
+            .catch(error => console.error("Error loading CSV:", error));
+
+        // Apply custom styling
+        const style = document.createElement('style');
+        style.textContent = `
+            .tabulator {
+                font-family: inherit;
+                border: none;
+            }
+            
+            .tabulator .tabulator-header {
+                background-color: #f3f4f6;
+                border-bottom: 2px solid #e5e7eb;
+            }
+            
+            .tabulator .tabulator-header .tabulator-col {
+                background-color: #f3f4f6;
+                color: #1f2937;
+                font-weight: 600;
+                padding: 12px 8px;
+                border-right: 1px solid #e5e7eb;
+            }
+            
+            .tabulator .tabulator-row {
+                border-bottom: 1px solid #e5e7eb;
+            }
+            
+            .tabulator .tabulator-row:hover {
+                background-color: #f9fafb;
+            }
+            
+            .tabulator .tabulator-cell {
+                padding: 12px 8px;
+                color: #374151;
+                border-right: 1px solid #f3f4f6;
+            }
+            
+            .tabulator-footer {
+                background-color: #f9fafb;
+                border-top: 1px solid #e5e7eb;
+                padding: 12px;
+                color: #6b7280;
+            }
+            
+            .tabulator-paginator {
+                color: #6b7280;
+            }
+            
+            .tabulator-page {
+                color: #6b7280;
+                border: 1px solid #d1d5db;
+                border-radius: 0.375rem;
+                padding: 0.5rem 0.75rem;
+                margin: 0 4px;
+                background-color: white;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .tabulator-page:hover {
+                background-color: #e5e7eb;
+            }
+            
+            .tabulator-page.active {
+                background-color: #3b82f6;
+                color: white;
+                border: 1px solid #3b82f6;
+            }
+            
+            .tabulator-col-content {
+                width: 100% !important;
+            }
+            
+            .tabulator .tabulator-col:last-child {
+                width: 0 !important;
+                min-width: 0 !important;
+                border: none !important;
+                padding: 0 !important;
+                background-color: transparent !important;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+
+{% enddemo %}

@@ -1,0 +1,1107 @@
+---
+title: How likely is 'likely'?
+author: Manish Datt
+date: '2026-03-10'
+description: .
+image: likely_probable.png
+categories:
+  - ApacheEcharts
+  - TidyTuesday
+layout: layouts/base-min.njk
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absolute Judgements - TidyTuesday</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/danfojs@1.1.2/lib/bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="container mx-auto px-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-6">Absolute Judgements Data</h1>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div id="table-container"></div>
+                </div>
+            </div>
+            
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-6">Pairwise Comparisons Data</h1>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div id="table-container-pw"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-8">
+            <div id="unique-counts-container" class="bg-white rounded-lg shadow-lg p-6"></div>
+        </div>
+        
+        <div class="mb-8">
+            <div id="matrix-container" class="bg-white rounded-lg shadow-lg p-6"></div>
+        </div>
+        
+        <div class="mb-8">
+            <div id="heatmap-container" class="bg-white rounded-lg shadow-lg p-6"></div>
+        </div>
+        
+        <div class="mb-8">
+            <div id="heatmap-container-reverse" class="bg-white rounded-lg shadow-lg p-6"></div>
+        </div>
+        
+        <div class="mb-8">
+            <div id="heatmap-container-both" class="bg-white rounded-lg shadow-lg p-6"></div>
+        </div>
+        
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Respondent Metadata</h1>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <div id="table-container-rm"></div>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and parse CSV data
+        async function loadData() {
+            const response = await fetch('absolute_judgements.csv');
+            const csvText = await response.text();
+            
+            // Parse CSV
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(',');
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(',');
+                if (row.length === 4) {
+                    data.push({
+                        response_id: parseInt(row[0]),
+                        term: row[1],
+                        probability: parseInt(row[2]),
+                        order: parseInt(row[3])
+                    });
+                }
+            }
+            
+            return data;
+        }
+
+        // Initialize Tabulator
+        loadData().then(data => {
+            const table = new Tabulator("#table-container", {
+                data: data,
+                layout: "fitColumns",
+                responsiveLayout: "hide",
+                pagination: "local",
+                paginationSize: 10,
+                paginationSizeSelector: [10, 20, 50, 100],
+                movableColumns: true,
+                height: "400px",
+                theme: "tailwing",
+                customThemes: {
+                    "tailwing": {
+                        "table": "border-collapse w-full",
+                        "header": "bg-gray-800 text-white uppercase text-sm leading-normal",
+                        "headerSort": "bg-gray-700",
+                        "headerFilter": "bg-gray-700",
+                        "row": "border-b border-gray-200 hover:bg-gray-50",
+                        "rowAlternate": "bg-gray-50",
+                        "cell": "py-3 px-6 text-left whitespace-nowrap",
+                        "select": "bg-gray-800 text-white rounded px-2 py-1",
+                        "button": "bg-gray-800 text-white px-3 py-1 rounded hover:bg-gray-700 mr-1",
+                        "buttonActive": "bg-gray-600",
+                        "input": "border border-gray-300 rounded px-2 py-1",
+                        "progress": "bg-gray-300 h-2 rounded overflow-hidden",
+                        "progressBar": "bg-gray-600 h-full",
+                        "tooltip": "bg-gray-800 text-white px-2 py-1 rounded text-sm",
+                        "tooltipInner": "bg-gray-800 text-white px-2 py-1 rounded text-sm"
+                    }
+                },
+                columns: [
+                    { 
+                        title: "Response ID", 
+                        field: "response_id", 
+                        headerFilter: "input",
+                        sorter: "number",
+                        width: 120
+                    },
+                    { 
+                        title: "Term", 
+                        field: "term", 
+                        headerFilter: "input",
+                        sorter: "string"
+                    },
+                    { 
+                        title: "Probability", 
+                        field: "probability", 
+                        headerFilter: "input",
+                        sorter: "number",
+                        formatter: function(cell) {
+                            const value = cell.getValue();
+                            let colorClass = 'bg-gray-500';
+                            if (value >= 80) colorClass = 'bg-green-500';
+                            else if (value >= 60) colorClass = 'bg-yellow-500';
+                            else if (value >= 40) colorClass = 'bg-orange-500';
+                            else colorClass = 'bg-red-500';
+                            return `<span class="${colorClass} text-white px-2 py-1 rounded text-sm">${value}%</span>`;
+                        }
+                    },
+                    { 
+                        title: "Order", 
+                        field: "order", 
+                        headerFilter: "input",
+                        sorter: "number",
+                        width: 80
+                    }
+                ],
+                footerElement: "<div class='flex justify-between items-center p-2 text-sm text-gray-600'><span>Total: <span id='total-count' class='font-bold text-gray-800'>0</span> records</span></div>"
+            });
+            
+            // Update total count
+            table.on("dataLoaded", function(data){
+                document.getElementById('total-count').textContent = data.length;
+            });
+        });
+        
+        // Fetch and parse pairwise comparisons CSV data
+        async function loadPairwiseData() {
+            const response = await fetch('pairwise_comparisons.csv');
+            const csvText = await response.text();
+            
+            // Parse CSV
+            const lines = csvText.trim().split('\n');
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(',');
+                if (row.length === 5) {
+                    data.push({
+                        response_id: parseInt(row[0]),
+                        pair_id: parseInt(row[1]),
+                        term1: row[2],
+                        term2: row[3],
+                        selected: row[4]
+                    });
+                }
+            }
+            
+            return data;
+        }
+        
+        // Count unique values using Danfo.js
+        function countUniqueValues(data) {
+            // Create DataFrame from data using Danfo.js
+            const df = new dfd.DataFrame(data);
+            
+            // Count unique values in term1 column
+            const term1Unique = df['term1'].unique();
+            const term1Count = term1Unique.values.length;
+            
+            // Count unique values in term2 column
+            const term2Unique = df['term2'].unique();
+            const term2Count = term2Unique.values.length;
+            
+            // Combine all unique values from both columns
+            const allTerms = [...term1Unique.values, ...term2Unique.values];
+            const uniqueAll = [...new Set(allTerms)];
+            const totalUniqueCount = uniqueAll.length;
+            
+            return {
+                term1Count: term1Count,
+                term2Count: term2Count,
+                totalUniqueCount: totalUniqueCount,
+                term1Values: term1Unique.values,
+                term2Values: term2Unique.values,
+                allUniqueTerms: uniqueAll.sort()
+            };
+        }
+        
+        // Create symmetric matrix - lower triangle from (A,B), upper triangle from (B,A)
+        function createComparisonMatrix(data, allTerms) {
+            // Get unique terms sorted
+            const terms = allTerms.sort();
+            const n = terms.length;
+            
+            // Initialize matrix - store object with both percentages
+            const matrix = [];
+            for (let i = 0; i < n; i++) {
+                matrix[i] = new Array(n).fill({ term1Pct: 0, term2Pct: 0 });
+            }
+            
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (i === j) {
+                        matrix[i][j] = { term1Pct: 0, term2Pct: 0 };
+                    } else if (i > j) {
+                        // Lower triangle: use (term1, term2) pairs
+                        const term1 = terms[i];
+                        const term2 = terms[j];
+                        
+                        const filteredData = data.filter(row => row.term1 === term1 && row.term2 === term2);
+                        const total = filteredData.length;
+                        
+                        if (total > 0) {
+                            const term1Selected = filteredData.filter(row => row.selected === term1).length;
+                            const term2Selected = filteredData.filter(row => row.selected === term2).length;
+                            
+                            matrix[i][j] = {
+                                term1Pct: Math.round((term1Selected / total) * 100 * 10) / 10,
+                                term2Pct: Math.round((term2Selected / total) * 100 * 10) / 10
+                            };
+                        } else {
+                            matrix[i][j] = { term1Pct: 0, term2Pct: 0 };
+                        }
+                    } else {
+                        // Upper triangle: use (term2, term1) pairs (reversed)
+                        const term1 = terms[j]; // note: swapped
+                        const term2 = terms[i]; // note: swapped
+                        
+                        const filteredData = data.filter(row => row.term1 === term1 && row.term2 === term2);
+                        const total = filteredData.length;
+                        
+                        if (total > 0) {
+                            const term1Selected = filteredData.filter(row => row.selected === term1).length;
+                            const term2Selected = filteredData.filter(row => row.selected === term2).length;
+                            
+                            // Store with original row/col labels in mind
+                            // Row is terms[i], Col is terms[j]
+                            // So we store term2's percentage first (because term1 in data = terms[j] = col)
+                            matrix[i][j] = {
+                                term1Pct: Math.round((term2Selected / total) * 100 * 10) / 10,
+                                term2Pct: Math.round((term1Selected / total) * 100 * 10) / 10
+                            };
+                        } else {
+                            matrix[i][j] = { term1Pct: 0, term2Pct: 0 };
+                        }
+                    }
+                }
+            }
+            
+            return { matrix, terms };
+        }
+        
+        // Display unique value counts
+        function displayUniqueCounts(uniqueCounts) {
+            const container = document.getElementById('unique-counts-container');
+            container.innerHTML = `
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Unique Value Counts (using Danfo.js)</h3>
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <div class="bg-white p-3 rounded shadow">
+                        <div class="text-sm text-gray-600">Unique Term 1</div>
+                        <div class="text-2xl font-bold text-blue-600">${uniqueCounts.term1Count}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow">
+                        <div class="text-sm text-gray-600">Unique Term 2</div>
+                        <div class="text-2xl font-bold text-green-600">${uniqueCounts.term2Count}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow">
+                        <div class="text-sm text-gray-600">Total Unique Terms</div>
+                        <div class="text-2xl font-bold text-purple-600">${uniqueCounts.totalUniqueCount}</div>
+                    </div>
+                </div>
+                <div class="mt-3 text-sm text-gray-600">
+                    <strong>Term 1 values:</strong> ${uniqueCounts.term1Values.sort().join(', ')}
+                </div>
+                <div class="mt-2 text-sm text-gray-600">
+                    <strong>Term 2 values:</strong> ${uniqueCounts.term2Values.sort().join(', ')}
+                </div>
+            `;
+        }
+        
+        // Display comparison matrix
+        function displayComparisonMatrix(matrixData) {
+            const { matrix, terms } = matrixData;
+            const container = document.getElementById('matrix-container');
+            
+            let tableHTML = '<table class="w-full border-collapse text-sm">';
+            
+            // Header row with term2 values
+            tableHTML += '<tr><th class="border p-2 bg-gray-200"></th>';
+            for (let j = 0; j < terms.length; j++) {
+                tableHTML += `<th class="border p-2 bg-gray-200 text-xs">${terms[j]}</th>`;
+            }
+            tableHTML += '</tr>';
+            
+            // Data rows
+            for (let i = 0; i < terms.length; i++) {
+                tableHTML += `<tr><td class="border p-2 bg-gray-200 font-bold text-xs">${terms[i]}</td>`;
+                for (let j = 0; j < terms.length; j++) {
+                    const cell = matrix[i][j];
+                    const term1Pct = cell.term1Pct;
+                    const term2Pct = cell.term2Pct;
+                    let bgClass = 'bg-white';
+                    if (term1Pct > term2Pct) bgClass = 'bg-green-100';
+                    else if (term1Pct < term2Pct) bgClass = 'bg-blue-100';
+                    tableHTML += `<td class="border p-2 text-center ${bgClass} text-xs">${term1Pct}/${term2Pct}</td>`;
+                }
+                tableHTML += '</tr>';
+            }
+            
+            tableHTML += '</table>';
+            
+            container.innerHTML = `
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Comparison Matrix (using Danfo.js)</h3>
+                <p class="text-sm text-gray-600 mb-3">Lower triangle: values from (row_term, col_term) pairs. Upper triangle: values from (col_term, row_term) pairs. Format: row_term%/col_term%.</p>
+                <div class="overflow-x-auto">${tableHTML}</div>
+            `;
+        }
+        
+        // Display heatmap using ECharts
+        function displayHeatmap(matrixData) {
+            const { matrix, terms } = matrixData;
+            const container = document.getElementById('heatmap-container');
+            
+            // Find longest term for label width calculation
+            const maxTermLength = Math.max(...terms.map(t => t.length));
+            const labelPadding = maxTermLength * 8 + 30; // Approximate pixel width per char + padding
+            
+            // Prepare data for ECharts heatmap, setting diagonal to null to hide text
+            const data = [];
+            for (let i = 0; i < terms.length; i++) {
+                for (let j = 0; j < terms.length; j++) {
+                    const value = matrix[i][j];
+                    // Hide diagonal values (set to null)
+                    if (i === j) {
+                        data.push([j, i, null]);
+                    } else {
+                        data.push([j, i, value]);
+                    }
+                }
+            }
+            
+            container.innerHTML = `
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Heatmap Visualization (using ECharts)</h3>
+                <p class="text-sm text-gray-600 mb-3">This heatmap shows only forward pairs (A,B) where term1=A and term2=B. Values show percentage of times the row term (A) was selected.</p>
+                <div id="heatmap-chart" style="width: 100%;"></div>
+            `;
+            
+            // Initialize ECharts
+            const chartDom = document.getElementById('heatmap-chart');
+            const myChart = echarts.init(chartDom);
+            
+            // Calculate square dimensions and cell size
+            const getSquareSize = () => {
+                const containerWidth = chartDom.clientWidth;
+                const size = Math.min(containerWidth - labelPadding - 60, 700);
+                return Math.max(size, 400);
+            };
+            
+            // Calculate cell size to make cells square
+            const cellSize = Math.floor(getSquareSize() / terms.length);
+            
+            const option = {
+                title: {
+                    text: 'Forward Pairs (A→B)',
+                    left: 'left',
+                    top: 10,
+                    left: labelPadding,
+                    textStyle: {
+                        fontSize: 16,
+                        fontWeight: 'bold'
+                    }
+                },
+                tooltip: {
+                    position: 'top',
+                    formatter: function(params) {
+                        if (params.value[2] === null) return `${terms[params.value[1]]} vs ${terms[params.value[0]]}<br/>Value: <b>0</b>`;
+                        return `${terms[params.value[1]]} vs ${terms[params.value[0]]}<br/>Value: <b>${params.value[2]}</b>`;
+                    }
+                },
+                grid: {
+                    top: 50,
+                    bottom: 100,
+                    left: labelPadding,
+                    right: 50,
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    data: terms,
+                    splitArea: { show: true },
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#3b82f6'
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: terms,
+                    splitArea: { show: true },
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        fontSize: 11,
+                        color: '#16a34a'
+                    },
+                    inverse: true
+                },
+                visualMap: {
+                    min: 0,
+                    max: 100,
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '0%',
+                    show: false,
+                    inRange: {
+                        color: ['#3b82f6', '#ffffff', '#22c55e']
+                    }
+                },
+                series: [{
+                    name: 'Comparison',
+                    type: 'heatmap',
+                    data: data,
+                    label: {
+                        show: true,
+                        fontSize: 10,
+                        color: '#000',
+                        formatter: function(params) {
+                            if (params.value[2] === null) return '';
+                            const val = params.value[2];
+                            return val < 0 ? Math.abs(val) : val;
+                        }
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    },
+                    itemStyle: {
+                        borderColor: '#ccc',
+                        borderWidth: 1
+                    }
+                }]
+            };
+            
+            myChart.setOption(option);
+            
+            // Handle resize - maintain square aspect ratio with proper label spacing
+            const resizeChart = () => {
+                const containerWidth = chartDom.clientWidth;
+                const size = Math.min(containerWidth - labelPadding - 60, 700);
+                const actualSize = Math.max(size, 400);
+                chartDom.style.height = (actualSize + 100) + 'px';
+                myChart.resize();
+            };
+            
+            window.addEventListener('resize', resizeChart);
+            
+            // Set initial square size
+            setTimeout(resizeChart, 100);
+        }
+        
+        // Create matrix for both directions - lower triangle from (A,B), upper triangle from (B,A)
+        function createComparisonMatrixBothDirections(data, allTerms) {
+            const terms = allTerms.sort();
+            const n = terms.length;
+            
+            const matrix = [];
+            for (let i = 0; i < n; i++) {
+                matrix[i] = new Array(n).fill({ forwardPct: 0, reversePct: 0, total: 0 });
+            }
+            
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (i === j) {
+                        matrix[i][j] = { forwardPct: 0, reversePct: 0, total: 0 };
+                    } else {
+                        const rowTerm = terms[i];
+                        const colTerm = terms[j];
+                        
+                        if (i > j) {
+                            // Lower triangle: use (rowTerm, colTerm) pairs only
+                            // Show percentage for rowTerm (term1 in these pairs)
+                            const forwardPairs = data.filter(row => row.term1 === rowTerm && row.term2 === colTerm);
+                            const total = forwardPairs.length;
+                            
+                            if (total > 0) {
+                                const rowWins = forwardPairs.filter(row => row.selected === rowTerm).length;
+                                matrix[i][j] = {
+                                    forwardPct: Math.round((rowWins / total) * 100 * 10) / 10,
+                                    reversePct: Math.round(((total - rowWins) / total) * 100 * 10) / 10,
+                                    total: total
+                                };
+                            } else {
+                                matrix[i][j] = { forwardPct: 0, reversePct: 0, total: 0 };
+                            }
+                        } else {
+                            // Upper triangle: use (colTerm, rowTerm) pairs only  
+                            // Show percentage for rowTerm (term2 in these pairs, since term1=colTerm)
+                            const reversePairs = data.filter(row => row.term1 === colTerm && row.term2 === rowTerm);
+                            const total = reversePairs.length;
+                            
+                            if (total > 0) {
+                                // In these pairs, term2 = rowTerm, so we count when rowTerm was selected
+                                const rowWins = reversePairs.filter(row => row.selected === rowTerm).length;
+                                matrix[i][j] = {
+                                    forwardPct: Math.round((rowWins / total) * 100 * 10) / 10,
+                                    reversePct: Math.round(((total - rowWins) / total) * 100 * 10) / 10,
+                                    total: total
+                                };
+                            } else {
+                                matrix[i][j] = { forwardPct: 0, reversePct: 0, total: 0 };
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return { matrix, terms };
+        }
+        
+        // Display second heatmap using ECharts (both directions)
+        function displayHeatmapBothDirections(matrixData) {
+            const { matrix, terms } = matrixData;
+            const container = document.getElementById('heatmap-container-both');
+            
+            // Find longest term for label width calculation
+            const maxTermLength = Math.max(...terms.map(t => t.length));
+            const labelPadding = maxTermLength * 8 + 30;
+            
+            // Prepare data - lower triangle shows rowTerm %, upper triangle shows colTerm %
+            const data = [];
+            let maxVal = 0;
+            for (let i = 0; i < terms.length; i++) {
+                for (let j = 0; j < terms.length; j++) {
+                    const cell = matrix[i][j];
+                    let displayValue = 0;
+                    
+                    if (i === j) {
+                        data.push([j, i, null]);
+                    } else if (i > j) {
+                        // Lower triangle: show rowTerm % (forwardPct)
+                        displayValue = cell.forwardPct;
+                        data.push([j, i, displayValue]);
+                        if (displayValue > maxVal) maxVal = displayValue;
+                    } else {
+                        // Upper triangle: show colTerm % - which is reversePct for the other direction
+                        // Since cell.reversePct is % for colTerm when looking at (colTerm, rowTerm) pairs
+                        displayValue = cell.reversePct;
+                        data.push([j, i, displayValue]);
+                        if (displayValue > maxVal) maxVal = displayValue;
+                    }
+                }
+            }
+            
+            container.innerHTML = `
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Heatmap (Both Directions)</h3>
+                <p class="text-sm text-gray-600 mb-3"><b>Lower triangle:</b> % from (row_term, col_term) pairs showing how often row term won. <b>Upper triangle:</b> % from (col_term, row_term) pairs showing how often column term won.</p>
+                <div id="heatmap-chart-both" style="width: 100%;"></div>
+            `;
+            
+            const chartDom = document.getElementById('heatmap-chart-both');
+            const myChart = echarts.init(chartDom);
+            
+            const option = {
+                title: {
+                    text: 'Pairwise Comparison (Both Directions)',
+                    left: labelPadding,
+                    top: 10,
+                    textStyle: {
+                        fontSize: 16,
+                        fontWeight: 'bold'
+                    }
+                },
+                tooltip: {
+                    position: 'top',
+                    formatter: function(params) {
+                        if (params.value[2] === null) return `${terms[params.value[1]]} vs ${terms[params.value[0]]}<br/>Value: <b>0</b>`;
+                        const rowIdx = params.value[1]; // y-axis index (row)
+                        const colIdx = params.value[0]; // x-axis index (column)
+                        const cell = matrix[rowIdx][colIdx];
+                        
+                        if (rowIdx > colIdx) {
+                            // Lower triangle: show row term's percentage
+                            return `<b>${terms[rowIdx]} vs ${terms[colIdx]}</b><br/>` +
+                                   `${terms[rowIdx]}: ${cell.forwardPct}%<br/>` +
+                                   `Pairs: ${cell.total}`;
+                        } else {
+                            // Upper triangle: show column term's percentage
+                            return `<b>${terms[colIdx]} vs ${terms[rowIdx]}</b><br/>` +
+                                   `${terms[colIdx]}: ${cell.reversePct}%<br/>` +
+                                   `Pairs: ${cell.total}`;
+                        }
+                    }
+                },
+                grid: {
+                    top: 50,
+                    bottom: 100,
+                    left: labelPadding,
+                    right: 50,
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    data: terms,
+                    splitArea: { show: true },
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#3b82f6'
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: terms,
+                    splitArea: { show: true },
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        fontSize: 11,
+                        color: '#16a34a'
+                    },
+                    inverse: true
+                },
+                visualMap: {
+                    min: 0,
+                    max: maxVal > 0 ? Math.max(maxVal, 50) : 100,
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '0%',
+                    show: false,
+                    inRange: {
+                        color: ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#a50f15']
+                    }
+                },
+                series: [{
+                    name: 'Comparison',
+                    type: 'heatmap',
+                    data: data,
+                    label: {
+                        show: true,
+                        fontSize: 10,
+                        color: '#000',
+                        formatter: function(params) {
+                            if (params.value[2] === null) return '';
+                            const rowIdx = params.value[1];
+                            const colIdx = params.value[0];
+                            const cell = matrix[rowIdx][colIdx];
+                            // Lower triangle: row %, Upper triangle: col %
+                            if (rowIdx > colIdx) {
+                                return cell.forwardPct;
+                            } else {
+                                return cell.reversePct;
+                            }
+                        }
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    },
+                    itemStyle: {
+                        borderColor: '#ccc',
+                        borderWidth: 1
+                    }
+                }]
+            };
+            
+            myChart.setOption(option);
+            
+            const resizeChart = () => {
+                const containerWidth = chartDom.clientWidth;
+                const size = Math.min(containerWidth - labelPadding - 60, 700);
+                const actualSize = Math.max(size, 400);
+                chartDom.style.height = (actualSize + 100) + 'px';
+                myChart.resize();
+            };
+            
+            window.addEventListener('resize', resizeChart);
+            setTimeout(resizeChart, 100);
+        }
+        
+        // Create matrix for reverse (B,A) pairs only - shows percentage of times term1 was selected
+        function createComparisonMatrixReverse(data, allTerms) {
+            const terms = allTerms.sort();
+            const n = terms.length;
+            
+            const matrix = [];
+            for (let i = 0; i < n; i++) {
+                matrix[i] = new Array(n).fill(0);
+            }
+            
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (i === j) {
+                        matrix[i][j] = 0;
+                    } else {
+                        const term1 = terms[i];
+                        const term2 = terms[j];
+                        
+                        // Only count reverse pairs (term1=B, term2=A)
+                        const reversePairs = data.filter(row => row.term1 === term2 && row.term2 === term1);
+                        const total = reversePairs.length;
+                        
+                        if (total > 0) {
+                            // Count wins for term1 and calculate percentage
+                            const term1Wins = reversePairs.filter(row => row.selected === term1).length;
+                            matrix[i][j] = Math.round((term1Wins / total) * 100 * 10) / 10;
+                        } else {
+                            matrix[i][j] = 0;
+                        }
+                    }
+                }
+            }
+            
+            return { matrix, terms };
+        }
+        
+        // Display heatmap for reverse (B,A) pairs only
+        function displayHeatmapReverse(matrixData) {
+            const { matrix, terms } = matrixData;
+            const container = document.getElementById('heatmap-container-reverse');
+            
+            const maxTermLength = Math.max(...terms.map(t => t.length));
+            const labelPadding = maxTermLength * 8 + 30;
+            
+            const data = [];
+            for (let i = 0; i < terms.length; i++) {
+                for (let j = 0; j < terms.length; j++) {
+                    const value = matrix[i][j];
+                    if (i === j) {
+                        data.push([j, i, null]);
+                    } else {
+                        data.push([j, i, value]);
+                    }
+                }
+            }
+            
+            container.innerHTML = `
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Heatmap (Reverse: B→A pairs)</h3>
+                <p class="text-sm text-gray-600 mb-3">This heatmap shows only reverse pairs where term1=B and term2=A. Values show percentage of times the row term was selected.</p>
+                <div id="heatmap-chart-reverse" style="width: 100%;"></div>
+            `;
+            
+            const chartDom = document.getElementById('heatmap-chart-reverse');
+            const myChart = echarts.init(chartDom);
+            
+            const option = {
+                title: {
+                    text: 'Reverse Pairs (B→A)',
+                    left: labelPadding,
+                    top: 10,
+                    textStyle: {
+                        fontSize: 16,
+                        fontWeight: 'bold'
+                    }
+                },
+                tooltip: {
+                    position: 'top',
+                    formatter: function(params) {
+                        if (params.value[2] === null) return `${terms[params.value[1]]} vs ${terms[params.value[0]]}<br/>Value: <b>0</b>`;
+                        return `${terms[params.value[1]]} vs ${terms[params.value[0]]}<br/>Value: <b>${params.value[2]}</b>`;
+                    }
+                },
+                grid: {
+                    top: 50,
+                    bottom: 100,
+                    left: labelPadding,
+                    right: 50,
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    data: terms,
+                    splitArea: { show: true },
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        rotate: 45,
+                        fontSize: 11,
+                        color: '#22c55e'
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: terms,
+                    splitArea: { show: true },
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        fontSize: 11,
+                        color: '#3b82f6'
+                    },
+                    inverse: true
+                },
+                visualMap: {
+                    min: 0,
+                    max: 100,
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '0%',
+                    show: false,
+                    inRange: {
+                        color: ['#22c55e', '#ffffff', '#3b82f6']
+                    }
+                },
+                series: [{
+                    name: 'Comparison',
+                    type: 'heatmap',
+                    data: data,
+                    label: {
+                        show: true,
+                        fontSize: 10,
+                        color: '#000',
+                        formatter: function(params) {
+                            if (params.value[2] === null) return '';
+                            const val = params.value[2];
+                            return val < 0 ? Math.abs(val) : val;
+                        }
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    },
+                    itemStyle: {
+                        borderColor: '#ccc',
+                        borderWidth: 1
+                    }
+                }]
+            };
+            
+            myChart.setOption(option);
+            
+            const resizeChart = () => {
+                const containerWidth = chartDom.clientWidth;
+                const size = Math.min(containerWidth - labelPadding - 60, 700);
+                const actualSize = Math.max(size, 400);
+                chartDom.style.height = (actualSize + 100) + 'px';
+                myChart.resize();
+            };
+            
+            window.addEventListener('resize', resizeChart);
+            setTimeout(resizeChart, 100);
+        }
+        
+        // Initialize Tabulator for pairwise comparisons
+        function initPairwiseTable() {
+            loadPairwiseData().then(data => {
+                // Use Danfo.js to count unique values
+                const uniqueCounts = countUniqueValues(data);
+                if (uniqueCounts) {
+                    displayUniqueCounts(uniqueCounts);
+                    
+                    // Create and display comparison matrix using Danfo.js
+                    const matrixData = createComparisonMatrix(data, uniqueCounts.allUniqueTerms);
+                    displayComparisonMatrix(matrixData);
+                    
+                    // Display heatmap using ECharts
+                    displayHeatmap(matrixData);
+                    
+                    // Display reverse heatmap (B,A pairs only)
+                    const matrixDataReverse = createComparisonMatrixReverse(data, uniqueCounts.allUniqueTerms);
+                    displayHeatmapReverse(matrixDataReverse);
+                    
+                    // Display second heatmap considering both directions
+                    const matrixDataBoth = createComparisonMatrixBothDirections(data, uniqueCounts.allUniqueTerms);
+                    displayHeatmapBothDirections(matrixDataBoth);
+                }
+                
+                const tablePw = new Tabulator("#table-container-pw", {
+                    data: data,
+                    layout: "fitColumns",
+                    responsiveLayout: "hide",
+                    pagination: "local",
+                    paginationSize: 10,
+                    paginationSizeSelector: [10, 20, 50, 100],
+                    movableColumns: true,
+                    height: "400px",
+                    theme: "tailwing",
+                    customThemes: {
+                        "tailwing": {
+                            "table": "border-collapse w-full",
+                            "header": "bg-gray-800 text-white uppercase text-sm leading-normal",
+                            "headerSort": "bg-gray-700",
+                            "headerFilter": "bg-gray-700",
+                            "row": "border-b border-gray-200 hover:bg-gray-50",
+                            "rowAlternate": "bg-gray-50",
+                            "cell": "py-3 px-6 text-left whitespace-nowrap",
+                            "select": "bg-gray-800 text-white rounded px-2 py-1",
+                            "button": "bg-gray-800 text-white px-3 py-1 rounded hover:bg-gray-700 mr-1",
+                            "buttonActive": "bg-gray-600",
+                            "input": "border border-gray-300 rounded px-2 py-1",
+                            "progress": "bg-gray-300 h-2 rounded overflow-hidden",
+                            "progressBar": "bg-gray-600 h-full",
+                            "tooltip": "bg-gray-800 text-white px-2 py-1 rounded text-sm",
+                            "tooltipInner": "bg-gray-800 text-white px-2 py-1 rounded text-sm"
+                        }
+                    },
+                    columns: [
+                        { 
+                            title: "Response ID", 
+                            field: "response_id", 
+                            headerFilter: "input",
+                            sorter: "number",
+                            width: 120
+                        },
+                        { 
+                            title: "Pair ID", 
+                            field: "pair_id", 
+                            headerFilter: "input",
+                            sorter: "number",
+                            width: 80
+                        },
+                        { 
+                            title: "Term 1", 
+                            field: "term1", 
+                            headerFilter: "input",
+                            sorter: "string"
+                        },
+                        { 
+                            title: "Term 2", 
+                            field: "term2", 
+                            headerFilter: "input",
+                            sorter: "string"
+                        },
+                        { 
+                            title: "Selected", 
+                            field: "selected", 
+                            headerFilter: "input",
+                            sorter: "string",
+                            formatter: function(cell) {
+                                const value = cell.getValue();
+                                return `<span class="bg-blue-500 text-white px-2 py-1 rounded text-sm">${value}</span>`;
+                            }
+                        }
+                    ],
+                    footerElement: "<div class='flex justify-between items-center p-2 text-sm text-gray-600'><span>Total: <span id='total-count-pw' class='font-bold text-gray-800'>0</span> records</span></div>"
+                });
+                
+                // Update total count
+                tablePw.on("dataLoaded", function(data){
+                    document.getElementById('total-count-pw').textContent = data.length;
+                });
+            });
+        }
+        
+        // Call the function to initialize pairwise table
+        initPairwiseTable();
+        
+        // Fetch and parse respondent metadata CSV data
+        async function loadRespondentMetadata() {
+            const response = await fetch('respondent_metadata.csv');
+            const csvText = await response.text();
+            
+            // Parse CSV
+            const lines = csvText.trim().split('\n');
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(',');
+                if (row.length >= 6) {
+                    data.push({
+                        response_id: parseInt(row[0]),
+                        timestamp: row[1],
+                        age_band: row[2],
+                        english_background: row[3],
+                        education_level: row[4],
+                        country_of_residence: row[5]
+                    });
+                }
+            }
+            
+            return data;
+        }
+        
+        // Initialize Tabulator for respondent metadata
+        loadRespondentMetadata().then(data => {
+            const tableRm = new Tabulator("#table-container-rm", {
+                data: data,
+                layout: "fitColumns",
+                responsiveLayout: "hide",
+                pagination: "local",
+                paginationSize: 10,
+                paginationSizeSelector: [10, 20, 50, 100],
+                movableColumns: true,
+                height: "400px",
+                theme: "tailwing",
+                customThemes: {
+                    "tailwing": {
+                        "table": "border-collapse w-full",
+                        "header": "bg-gray-800 text-white uppercase text-sm leading-normal",
+                        "headerSort": "bg-gray-700",
+                        "headerFilter": "bg-gray-700",
+                        "row": "border-b border-gray-200 hover:bg-gray-50",
+                        "rowAlternate": "bg-gray-50",
+                        "cell": "py-3 px-6 text-left whitespace-nowrap",
+                        "select": "bg-gray-800 text-white rounded px-2 py-1",
+                        "button": "bg-gray-800 text-white px-3 py-1 rounded hover:bg-gray-700 mr-1",
+                        "buttonActive": "bg-gray-600",
+                        "input": "border border-gray-300 rounded px-2 py-1",
+                        "progress": "bg-gray-300 h-2 rounded overflow-hidden",
+                        "progressBar": "bg-gray-600 h-full",
+                        "tooltip": "bg-gray-800 text-white px-2 py-1 rounded text-sm",
+                        "tooltipInner": "bg-gray-800 text-white px-2 py-1 rounded text-sm"
+                    }
+                },
+                columns: [
+                    { 
+                        title: "Response ID", 
+                        field: "response_id", 
+                        headerFilter: "input",
+                        sorter: "number",
+                        width: 120
+                    },
+                    { 
+                        title: "Timestamp", 
+                        field: "timestamp", 
+                        headerFilter: "input",
+                        sorter: "string",
+                        width: 100
+                    },
+                    { 
+                        title: "Age Band", 
+                        field: "age_band", 
+                        headerFilter: "input",
+                        sorter: "string",
+                        width: 100
+                    },
+                    { 
+                        title: "English Background", 
+                        field: "english_background", 
+                        headerFilter: "input",
+                        sorter: "string"
+                    },
+                    { 
+                        title: "Education Level", 
+                        field: "education_level", 
+                        headerFilter: "input",
+                        sorter: "string",
+                        width: 150
+                    },
+                    { 
+                        title: "Country", 
+                        field: "country_of_residence", 
+                        headerFilter: "input",
+                        sorter: "string",
+                        width: 180
+                    }
+                ],
+                footerElement: "<div class='flex justify-between items-center p-2 text-sm text-gray-600'><span>Total: <span id='total-count-rm' class='font-bold text-gray-800'>0</span> records</span></div>"
+            });
+            
+            // Update total count
+            tableRm.on("dataLoaded", function(data){
+                document.getElementById('total-count-rm').textContent = data.length;
+            });
+        });
+    </script>
+</body>
