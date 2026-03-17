@@ -1,0 +1,315 @@
+---
+title: Salmonid Mortality Data
+author: Manish Datt
+date: '2026-03-17'
+description: Timeline of Salmonid mortality from 2020 to 2025.
+image: salmon_mortality.png
+categories:
+  - ApacheEcharts
+  - TidyTuesday
+slug: 2633
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<!-- Tabulator CSS, Apache ECharts, PapaParse, Danfo.js -->
+<link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/danfojs@1.1.2/lib/bundle.min.js"></script>
+<script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
+<div class="container mx-auto p-4">
+  <div class="mb-6">
+    <h3 class="text-xl font-bold mb-2">Monthly Losses Data</h3>
+    <div id="mortality-breakdown-chart" style="height: 460px;" class="mt-6"></div>
+    <h3 class="text-xl font-bold mt-6 mb-2">Monthly Losses Table</h3>
+    <div id="losses-table" class="mt-6"></div>
+  </div>
+  <div>
+    <h3 class="text-xl font-bold mb-2">Monthly Mortality Data</h3>
+    <div id="mortality-table"></div>
+  </div>
+</div>
+
+<script>
+// Function to load CSV and create Tabulator table (for mortality data)
+function loadCSVTable(url, tableId) {
+  fetch(url)
+    .then(response => response.text())
+    .then(csvText => {
+      const data = Papa.parse(csvText, { header: true }).data;
+      new Tabulator(`#${tableId}`, {
+        data: data,
+        layout: "fitColumns",
+        responsiveLayout: "hide",
+        pagination: "local",
+        paginationSize: 10,
+        placeholder: "No Data Available",
+        columns: Object.keys(data[0]).map(key => ({ title: key, field: key }))
+      });
+    })
+    .catch(error => {
+      console.error('Error loading CSV:', error);
+      document.getElementById(tableId).innerHTML = `<p class="text-red-500">Error loading data</p>`;
+    });
+}
+
+// Function to load losses CSV and create Tabulator table
+function loadLossesTable(url, tableId) {
+  fetch(url)
+    .then(response => response.text())
+    .then(csvText => {
+      const data = Papa.parse(csvText, { header: true }).data;
+      new Tabulator(`#${tableId}`, {
+        data: data,
+        layout: "fitColumns",
+        responsiveLayout: "hide",
+        pagination: "local",
+        paginationSize: 10,
+        placeholder: "No Data Available",
+        columns: Object.keys(data[0]).map(key => ({ title: key, field: key }))
+      });
+    })
+    .catch(error => {
+      console.error('Error loading CSV:', error);
+      document.getElementById(tableId).innerHTML = `<p class="text-red-500">Error loading data</p>`;
+    });
+}
+
+function loadMortalityBreakdownChart(url, chartId) {
+  fetch(url)
+    .then(response => response.text())
+    .then(csvText => {
+      const data = Papa.parse(csvText, { header: true }).data;
+
+      const cleanedData = data
+        .map(row => ({
+          date: row.date,
+          losses: Number(row.losses),
+          dead: Number(row.dead),
+          discarded: Number(row.discarded),
+          escaped: Number(row.escaped),
+          other: Number(row.other)
+        }))
+        .filter(row =>
+          row.date &&
+          Number.isFinite(row.losses) &&
+          Number.isFinite(row.dead) &&
+          Number.isFinite(row.discarded) &&
+          Number.isFinite(row.escaped) &&
+          Number.isFinite(row.other)
+        );
+
+      const df = new dfd.DataFrame(cleanedData);
+      const grouped = df.groupby(["date"]).col(["losses", "dead", "discarded", "escaped", "other"]).sum();
+      const columnIndexes = {
+        date: grouped.columns.indexOf("date"),
+        losses: grouped.columns.findIndex(column => column.startsWith("losses")),
+        dead: grouped.columns.findIndex(column => column.startsWith("dead")),
+        discarded: grouped.columns.findIndex(column => column.startsWith("discarded")),
+        escaped: grouped.columns.findIndex(column => column.startsWith("escaped")),
+        other: grouped.columns.findIndex(column => column.startsWith("other"))
+      };
+
+      const parsedData = grouped.values
+        .map(row => ({
+          date: new Date(row[columnIndexes.date]),
+          losses: Number(row[columnIndexes.losses]),
+          dead: Number(row[columnIndexes.dead]),
+          discarded: Number(row[columnIndexes.discarded]),
+          escaped: Number(row[columnIndexes.escaped]),
+          other: Number(row[columnIndexes.other])
+        }))
+        .filter(row => !Number.isNaN(row.date.getTime()))
+        .sort((a, b) => a.date - b.date);
+
+      const framesPerSegment = 10;
+      const animatedData = [];
+
+      parsedData.forEach((row, index) => {
+        if (index === 0) {
+          animatedData.push({
+            ...row,
+            displayDate: row.date,
+            displayLosses: row.losses
+          });
+          return;
+        }
+
+        const previousRow = parsedData[index - 1];
+
+        for (let step = 1; step <= framesPerSegment; step += 1) {
+          const progress = step / framesPerSegment;
+          const displayRow = step < framesPerSegment ? previousRow : row;
+          animatedData.push({
+            date: new Date(
+              previousRow.date.getTime() +
+              (row.date.getTime() - previousRow.date.getTime()) * progress
+            ),
+            losses: previousRow.losses + (row.losses - previousRow.losses) * progress,
+            displayDate: displayRow.date,
+            displayLosses: displayRow.losses,
+            dead: previousRow.dead + (row.dead - previousRow.dead) * progress,
+            discarded: previousRow.discarded + (row.discarded - previousRow.discarded) * progress,
+            escaped: previousRow.escaped + (row.escaped - previousRow.escaped) * progress,
+            other: previousRow.other + (row.other - previousRow.other) * progress
+          });
+        }
+      });
+
+      const chartDom = document.getElementById(chartId);
+      const myChart = echarts.init(chartDom);
+      const minDate = parsedData[0]?.date?.getTime();
+      const maxDate = parsedData[parsedData.length - 1]?.date?.getTime();
+      const seriesDefinitions = [
+        { key: 'dead', name: 'Dead', color: '#b91c1c' },
+        { key: 'discarded', name: 'Discarded', color: '#d97706' },
+        { key: 'escaped', name: 'Escaped', color: '#2563eb' },
+        { key: 'other', name: 'Other', color: '#059669' }
+      ];
+
+      const buildSeries = frameData => seriesDefinitions.map(series => ({
+        name: series.name,
+        type: 'line',
+        data: frameData.map(row => [row.date.getTime(), row[series.key]]),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: {
+          width: 3,
+          color: series.color
+        },
+        itemStyle: {
+          color: series.color
+        },
+        endLabel: {
+          show: frameData.length > 0,
+          formatter: function (params) {
+            return `${series.name}: ${Number(params.value[1]).toLocaleString()}`;
+          }
+        },
+        labelLayout: {
+          moveOverlap: 'shiftY'
+        },
+        emphasis: {
+          focus: 'series'
+        }
+      }));
+
+      const option = {
+        baseOption: {
+          timeline: {
+            axisType: 'category',
+            autoPlay: true,
+            rewind: false,
+            playInterval: 120,
+            left: 60,
+            right: 60,
+            bottom: 0,
+            loop: false,
+            controlStyle: {
+              showPlayBtn: true,
+              showPrevBtn: false,
+              showNextBtn: false
+            },
+            data: animatedData.map(row => row.date.toISOString()),
+            label: {
+              formatter: function (value) {
+                return new Date(value).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '-');
+              }
+            }
+          },
+          tooltip: {
+            trigger: 'axis'
+          },
+          animationDuration: 0,
+          animationDurationUpdate: 0,
+          xAxis: {
+            type: 'time',
+            min: minDate,
+            max: maxDate,
+            minInterval: 30 * 24 * 60 * 60 * 1000,
+            axisLabel: {
+              formatter: function (value) {
+                const date = new Date(value);
+                if (date.getMonth() !== 0) {
+                  return '';
+                }
+                return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '-');
+              }
+            }
+          },
+          yAxis: {
+            type: 'value',
+            name: 'Count',
+            axisLabel: {
+              formatter: function (value) {
+                return `${(value / 1000000).toFixed(0)}M`;
+              }
+            }
+          },
+          grid: {
+            left: 70,
+            right: 140,
+            top: 60,
+            bottom: 80
+          }
+        },
+        options: animatedData.map((_, index) => ({
+          title: {
+            text: `Timeline of Salmonid mortality data`// ${animatedData[index].date.toLocaleDateString()}`
+          },
+          graphic: [
+            {
+              type: 'group',
+              left: '30%',
+              top: '55%',
+              children: [
+                {
+                  type: 'rect',
+                  shape: {
+                    width: 170,
+                    height: 54,
+                    r: 8
+                  },
+                  style: {
+                    fill: 'rgba(255,255,255,0.9)',
+                    stroke: 'transparent',
+                    lineWidth: 0
+                  }
+                },
+                {
+                  type: 'text',
+                  left: 12,
+                  top: 10,
+                  style: {
+                    text: `Total losses in ${animatedData[index].displayDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}: ${(animatedData[index].displayLosses / 1000000).toFixed(2)}M`,
+                    fill: '#0f172a',
+                    font: 'bold 18px monospace'
+                  }
+                }
+              ]
+            }
+          ],
+          series: buildSeries(animatedData.slice(0, index + 1))
+        }))
+      };
+
+      myChart.setOption(option);
+
+      window.addEventListener('resize', () => {
+        myChart.resize();
+      });
+    })
+    .catch(error => {
+      console.error('Error loading CSV:', error);
+      document.getElementById(chartId).innerHTML = `<p class="text-red-500">Error loading data</p>`;
+    });
+}
+
+// Load the losses chart and table
+loadMortalityBreakdownChart('monthly_losses_data.csv', 'mortality-breakdown-chart');
+loadLossesTable('monthly_losses_data.csv', 'losses-table');
+// Load the mortality table
+loadCSVTable('monthly_mortality_data.csv', 'mortality-table');
+</script>
