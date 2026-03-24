@@ -1,0 +1,799 @@
+---
+title: Pi Digits Data
+author: Manish Datt
+date: '2026-03-22'
+description: Pi digits visualization using Tabulator and Tailwind CSS.
+image: pi_digits.jpeg
+categories:
+  - Tabulator
+  - TidyTuesday
+slug: 2634
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Digits Table</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tabulator CSS -->
+    <link href="https://unpkg.com/tabulator-tables@6.2.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <!-- Tabulator JS -->
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@6.2.0/dist/js/tabulator.min.js"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        /* Tailwind-styled Tabulator */
+        .tabulator-row {
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .tabulator-header-cell {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            color: #1f2937;
+            border-bottom: 2px solid #d1d5db;
+        }
+        .tabulator-cell {
+            padding: 12px;
+            color: #374151;
+        }
+        .tabulator-row:hover {
+            background-color: #f9fafb;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-8">
+        <div class="max-w-6xl mx-auto">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Pi Digits Data</h1>
+            <p class="text-gray-600 mb-6">TidyTuesday dataset - Digits of Pi</p>
+            
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div id="pi-digits-table"></div>
+            </div>
+
+            <div id="statistics" class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Position Odd<br/>Digit Even</p>
+                    <p id="stat-odd-even" class="text-2xl font-bold text-blue-600">-</p>
+                </div>
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Position Even<br/>Digit Odd</p>
+                    <p id="stat-even-odd" class="text-2xl font-bold text-green-600">-</p>
+                </div>
+                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Both Odd</p>
+                    <p id="stat-both-odd" class="text-2xl font-bold text-purple-600">-</p>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Both Even</p>
+                    <p id="stat-both-even" class="text-2xl font-bold text-amber-600">-</p>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Digit Frequency Distribution</h2>
+                <div id="digit-chart" class="bg-white rounded-lg shadow-md p-6" style="height: 400px;"></div>
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Digit Pair Heatmap</h2>
+                <div id="heatmap-chart" class="bg-white rounded-lg shadow-md p-6" style="height: 500px;"></div>
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Digit Frequency at Prime Positions</h2>
+                <div id="prime-chart" class="bg-white rounded-lg shadow-md p-6" style="height: 400px;"></div>
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Pi in Hexadecimal</h2>
+                <div class="bg-white rounded-lg shadow-md p-6 mb-4">
+                    <p class="text-sm text-gray-600 mb-2">First 200 hex digits:</p>
+                    <p id="pi-hex-preview" class="text-xs text-gray-700 font-mono break-all">Computing...</p>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Hexadecimal Digit Frequency Distribution</h2>
+                <div id="hex-chart" class="bg-white rounded-lg shadow-md p-6" style="height: 400px;"></div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                <div class="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Total Hex Digits</p>
+                    <p id="stat-hex-total" class="text-2xl font-bold text-cyan-600">-</p>
+                </div>
+                <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Most Frequent Hex Digit</p>
+                    <p id="stat-hex-frequent" class="text-2xl font-bold text-indigo-600">-</p>
+                </div>
+                <div class="bg-rose-50 border border-rose-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Least Frequent Hex Digit</p>
+                    <p id="stat-hex-least" class="text-2xl font-bold text-rose-600">-</p>
+                </div>
+                <div class="bg-lime-50 border border-lime-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-2">Hex Conversion Time</p>
+                    <p id="stat-hex-time" class="text-2xl font-bold text-lime-600">-</p>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Palindrome Analysis</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Total Palindromes</p>
+                        <p id="stat-pal-total" class="text-2xl font-bold text-teal-600">-</p>
+                    </div>
+                    <div class="bg-sky-50 border border-sky-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Unique Palindromes</p>
+                        <p id="stat-pal-unique" class="text-2xl font-bold text-sky-600">-</p>
+                    </div>
+                    <div class="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Longest Palindrome</p>
+                        <p id="stat-pal-longest" class="text-2xl font-bold text-cyan-600">-</p>
+                    </div>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Most Common Length</p>
+                        <p id="stat-pal-common" class="text-2xl font-bold text-blue-600">-</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 mb-4">All Palindromes (Including Trivial)</h3>
+                        <div id="palindrome-chart" class="bg-white rounded-lg shadow-md p-6" style="height: 400px;"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 mb-4">Non-Trivial Palindromes (Exclude Repeated Digits)</h3>
+                        <div id="palindrome-nontrivial-chart" class="bg-white rounded-lg shadow-md p-6" style="height: 400px;"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Non-Trivial Total</p>
+                        <p id="stat-pal-nontrivial-total" class="text-2xl font-bold text-emerald-600">-</p>
+                    </div>
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Non-Trivial Unique</p>
+                        <p id="stat-pal-nontrivial-unique" class="text-2xl font-bold text-green-600">-</p>
+                    </div>
+                    <div class="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Trivial Excluded</p>
+                        <p id="stat-pal-trivial-excluded" class="text-2xl font-bold text-teal-600">-</p>
+                    </div>
+                    <div class="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600 mb-2">Most Common NT Length</p>
+                        <p id="stat-pal-nontrivial-common" class="text-2xl font-bold text-cyan-600">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and parse CSV
+        fetch("pi_digits.csv")
+            .then(response => response.text())
+            .then(csvText => {
+                // Parse CSV manually
+                const lines = csvText.trim().split('\n');
+                const headers = lines[0].split(',');
+                
+                const data = lines.slice(1).map(line => {
+                    const values = line.split(',');
+                    return {
+                        digit_position: parseInt(values[0]),
+                        digit: parseInt(values[1])
+                    };
+                });
+
+                // Calculate statistics
+                let oddPosEvenDigit = 0;  // Position odd, digit even
+                let evenPosOddDigit = 0;  // Position even, digit odd
+                let bothOdd = 0;          // Both odd
+                let bothEven = 0;         // Both even
+
+                data.forEach(row => {
+                    const posOdd = row.digit_position % 2 === 1;
+                    const digitEven = row.digit % 2 === 0;
+
+                    if (posOdd && digitEven) {
+                        oddPosEvenDigit++;
+                    } else if (!posOdd && !digitEven) {
+                        evenPosOddDigit++;
+                    } else if (posOdd && !digitEven) {
+                        bothOdd++;
+                    } else if (!posOdd && digitEven) {
+                        bothEven++;
+                    }
+                });
+
+                // Update statistics display
+                document.getElementById('stat-odd-even').textContent = oddPosEvenDigit;
+                document.getElementById('stat-even-odd').textContent = evenPosOddDigit;
+                document.getElementById('stat-both-odd').textContent = bothOdd;
+                document.getElementById('stat-both-even').textContent = bothEven;
+
+                // Initialize Tabulator table
+                var table = new Tabulator("#pi-digits-table", {
+                    data: data,
+                    pagination: "local",
+                    paginationSize: 10,
+                    layout: "fitColumns",
+                    columns: [
+                        { title: "Position", field: "digit_position", sorter: "number", width: 150 },
+                        { title: "Digit", field: "digit", sorter: "number", width: 150 }
+                    ],
+                    headerSort: true
+                });
+
+                // Calculate digit frequency (0-9)
+                const digitFrequency = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(digit => {
+                    return data.filter(row => row.digit === digit).length;
+                });
+
+                // Initialize Apache ECharts bar chart
+                const chartDom = document.getElementById('digit-chart');
+                const myChart = echarts.init(chartDom);
+                const option = {
+                    title: {
+                        text: '',
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'shadow'
+                        }
+                    },
+                    grid: {
+                        left: '3%',
+                        right: '3%',
+                        bottom: '3%',
+                        top: '3%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                        name: 'Digit'
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: 'Frequency'
+                    },
+                    series: [
+                        {
+                            data: digitFrequency,
+                            type: 'bar',
+                            itemStyle: {
+                                color: '#3b82f6'
+                            },
+                            label: {
+                                show: true,
+                                position: 'top'
+                            }
+                        }
+                    ]
+                };
+                myChart.setOption(option);
+
+                // Calculate digit pair frequency (consecutive digits)
+                const pairMatrix = Array(10).fill(0).map(() => Array(10).fill(0));
+                
+                for (let i = 0; i < data.length - 1; i++) {
+                    const digit1 = data[i].digit;
+                    const digit2 = data[i + 1].digit;
+                    pairMatrix[digit1][digit2]++;
+                }
+
+                // Convert matrix to heatmap data format for ECharts
+                const heatmapData = [];
+                for (let i = 0; i < 10; i++) {
+                    for (let j = 0; j < 10; j++) {
+                        heatmapData.push([i, j, pairMatrix[i][j]]);
+                    }
+                }
+
+                // Initialize Apache ECharts heatmap
+                const heatmapDom = document.getElementById('heatmap-chart');
+                const heatmapChart = echarts.init(heatmapDom);
+                const heatmapOption = {
+                    tooltip: {
+                        position: 'top',
+                        formatter: function(params) {
+                            if (params.componentSubType === 'heatmap') {
+                                return `Pair: ${params.value[0]}→${params.value[1]}<br/>Count: ${params.value[2]}`;
+                            }
+                            return params;
+                        }
+                    },
+                    grid: {
+                        height: '80%',
+                        top: '10%'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                        name: 'Second Digit',
+                        splitArea: {
+                            show: true
+                        }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                        name: 'First Digit',
+                        splitArea: {
+                            show: true
+                        }
+                    },
+                    visualMap: {
+                        min: Math.min(...heatmapData.map(d => d[2])),
+                        max: Math.max(...heatmapData.map(d => d[2])),
+                        calculable: true,
+                        orient: 'vertical',
+                        right: '10px',
+                        top: 'center',
+                        inRange: {
+                            color: ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c', '#08306b']
+                        }
+                    },
+                    series: [
+                        {
+                            name: 'Pair Count',
+                            type: 'heatmap',
+                            data: heatmapData,
+                            label: {
+                                show: false
+                            },
+                            itemStyle: {
+                                borderColor: '#fff',
+                                borderWidth: 1
+                            }
+                        }
+                    ]
+                };
+                heatmapChart.setOption(heatmapOption);
+
+                // Helper function to check if a number is prime
+                function isPrime(n) {
+                    if (n < 2) return false;
+                    if (n === 2) return true;
+                    if (n % 2 === 0) return false;
+                    for (let i = 3; i * i <= n; i += 2) {
+                        if (n % i === 0) return false;
+                    }
+                    return true;
+                }
+
+                // Filter data for prime positions only
+                const primePositionData = data.filter(row => isPrime(row.digit_position));
+
+                // Calculate digit frequency for prime positions (0-9)
+                const primeDigitFrequency = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(digit => {
+                    return primePositionData.filter(row => row.digit === digit).length;
+                });
+
+                // Initialize Apache ECharts bar chart for prime positions
+                const primeChartDom = document.getElementById('prime-chart');
+                const primeChart = echarts.init(primeChartDom);
+                const primeOption = {
+                    title: {
+                        text: '',
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'shadow'
+                        }
+                    },
+                    grid: {
+                        left: '3%',
+                        right: '3%',
+                        bottom: '3%',
+                        top: '3%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                        name: 'Digit'
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: 'Frequency'
+                    },
+                    series: [
+                        {
+                            data: primeDigitFrequency,
+                            type: 'bar',
+                            itemStyle: {
+                                color: '#f59e0b'
+                            },
+                            label: {
+                                show: true,
+                                position: 'top'
+                            }
+                        }
+                    ]
+                };
+                primeChart.setOption(primeOption);
+
+                // ===== HEXADECIMAL CONVERSION - Load from file =====
+                const startHexTime = Date.now();
+                
+                console.log('Loading hexadecimal pi from file...');
+                
+                fetch('pi_hex.txt')
+                    .then(response => response.text())
+                    .then(hexPiString => {
+                        const endHexTime = Date.now();
+                        const hexConverTime = (endHexTime - startHexTime) / 1000;
+                        
+                        console.log('Hex pi loaded:', hexPiString.length, 'characters');
+                        console.log('Load time:', hexConverTime, 'seconds');
+                        
+                        // Display preview
+                        const hexPreview = hexPiString.substring(0, 200);
+                        document.getElementById('pi-hex-preview').textContent = hexPreview + '...';
+                        
+                        // Extract only hex digits (without the "3.")
+                        const hexDigitString = hexPiString.substring(2); // Remove "3."
+                        
+                        // Calculate hex digit frequency (0-9, A-F)
+                        const hexFrequency = {};
+                        const hexDigitLabels = [];
+                        for (let i = 0; i < 16; i++) {
+                            const hexDigit = i.toString(16).toUpperCase();
+                            hexDigitLabels.push(hexDigit);
+                            hexFrequency[hexDigit] = 0;
+                            hexFrequency[hexDigit.toLowerCase()] = 0; // Also count lowercase
+                        }
+                        
+                        // Count frequency of each hex digit
+                        for (let char of hexDigitString) {
+                            const upper = char.toUpperCase();
+                            if (hexFrequency.hasOwnProperty(upper)) {
+                                hexFrequency[upper]++;
+                            }
+                        }
+                        
+                        // Prepare data for chart (sorted by the 16 hex digits 0-F)
+                        const hexFreqArray = hexDigitLabels.map(label => hexFrequency[label]);
+                        
+                        // Find most and least frequent
+                        const maxFreq = Math.max(...hexFreqArray);
+                        const minFreq = Math.min(...hexFreqArray);
+                        const mostFreqIndex = hexFreqArray.indexOf(maxFreq);
+                        const leastFreqIndex = hexFreqArray.indexOf(minFreq);
+                        
+                        // Update statistics
+                        document.getElementById('stat-hex-total').textContent = hexDigitString.length.toLocaleString();
+                        document.getElementById('stat-hex-frequent').textContent = hexDigitLabels[mostFreqIndex] + ' (' + maxFreq.toLocaleString() + ')';
+                        document.getElementById('stat-hex-least').textContent = hexDigitLabels[leastFreqIndex] + ' (' + minFreq.toLocaleString() + ')';
+                        document.getElementById('stat-hex-time').textContent = hexConverTime.toFixed(2) + 's';
+                        
+                        // Create hex bar chart
+                        const hexChartDom = document.getElementById('hex-chart');
+                        const hexChart = echarts.init(hexChartDom);
+                        const hexChartOption = {
+                            title: {
+                                text: '',
+                                left: 'center'
+                            },
+                            tooltip: {
+                                trigger: 'axis',
+                                axisPointer: {
+                                    type: 'shadow'
+                                },
+                                formatter: function(params) {
+                                    if (params.length > 0) {
+                                        const dataIndex = params[0].dataIndex;
+                                        const hexDigit = hexDigitLabels[dataIndex];
+                                        const count = hexFreqArray[dataIndex];
+                                        const percentage = ((count / hexDigitString.length) * 100).toFixed(3);
+                                        return `Hex Digit: <b>${hexDigit}</b><br/>Count: ${count.toLocaleString()}<br/>Percentage: ${percentage}%`;
+                                    }
+                                    return '';
+                                }
+                            },
+                            grid: {
+                                left: '3%',
+                                right: '3%',
+                                bottom: '3%',
+                                top: '3%',
+                                containLabel: true
+                            },
+                            xAxis: {
+                                type: 'category',
+                                data: hexDigitLabels,
+                                name: 'Hex Digit (0-F)',
+                                nameLocation: 'middle',
+                                nameGap: 30
+                            },
+                            yAxis: {
+                                type: 'value',
+                                name: 'Frequency',
+                                nameLocation: 'middle',
+                                nameGap: 40
+                            },
+                            series: [
+                                {
+                                    data: hexFreqArray,
+                                    type: 'bar',
+                                    itemStyle: {
+                                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                            { offset: 0, color: '#ff7c7c' },
+                                            { offset: 0.5, color: '#ff6b6b' },
+                                            { offset: 1, color: '#7c3aed' }
+                                        ]),
+                                        borderRadius: [5, 5, 0, 0]
+                                    },
+                                    label: {
+                                        show: true,
+                                        position: 'top',
+                                        formatter: function(params) {
+                                            return params.value.toLocaleString();
+                                        },
+                                        fontSize: 11,
+                                        fontWeight: 'bold'
+                                    },
+                                    emphasis: {
+                                        itemStyle: {
+                                            opacity: 0.7
+                                        }
+                                    }
+                                }
+                            ],
+                            animationDuration: 1000
+                        };
+                        hexChart.setOption(hexChartOption);
+                        
+                        // Add resize listener
+                        window.addEventListener('resize', function() {
+                            hexChart.resize();
+                            myChart.resize();
+                            heatmapChart.resize();
+                            primeChart.resize();
+                        });
+                    })
+                    .catch(error => {
+                        console.error("Error loading hex file:", error);
+                        document.getElementById('pi-hex-preview').textContent = 'Error loading pi_hex.txt - please run generate_hex_pi.py first';
+                    });
+
+                // ===== PALINDROME ANALYSIS - Load from JSON =====
+                console.log('Loading palindrome data...');
+                
+                Promise.all([
+                    fetch('pi_palindromes.json').then(r => r.json()),
+                    fetch('pi_palindromes_nontrivial.json').then(r => r.json())
+                ])
+                .then(([palindromeData, nontrivialData]) => {
+                    console.log('Palindrome data loaded');
+                    
+                    // ===== ALL PALINDROMES =====
+                    const totalPalindromes = palindromeData.total_palindromes;
+                    const uniquePalindromes = palindromeData.unique_palindromes;
+                    const frequencyByLength = palindromeData.frequency_by_length;
+                    
+                    // Find longest palindrome length and most common length
+                    const lengths = Object.keys(frequencyByLength).map(Number).sort((a, b) => a - b);
+                    const longestLength = lengths[lengths.length - 1];
+                    
+                    let maxFreq = 0;
+                    let mostCommonLength = 0;
+                    for (let length in frequencyByLength) {
+                        if (frequencyByLength[length] > maxFreq) {
+                            maxFreq = frequencyByLength[length];
+                            mostCommonLength = length;
+                        }
+                    }
+                    
+                    // ===== NON-TRIVIAL PALINDROMES =====
+                    const totalNontrivial = nontrivialData.total_palindromes;
+                    const uniqueNontrivial = nontrivialData.unique_palindromes;
+                    const frequencyNontrivial = nontrivialData.frequency_by_length;
+                    const trivialExcluded = totalPalindromes - totalNontrivial;
+                    
+                    const lengthsNT = Object.keys(frequencyNontrivial).map(Number).sort((a, b) => a - b);
+                    
+                    let maxFreqNT = 0;
+                    let mostCommonLengthNT = 0;
+                    for (let length in frequencyNontrivial) {
+                        if (frequencyNontrivial[length] > maxFreqNT) {
+                            maxFreqNT = frequencyNontrivial[length];
+                            mostCommonLengthNT = length;
+                        }
+                    }
+                    
+                    // Update statistics
+                    document.getElementById('stat-pal-total').textContent = totalPalindromes.toLocaleString();
+                    document.getElementById('stat-pal-unique').textContent = uniquePalindromes.toLocaleString();
+                    document.getElementById('stat-pal-longest').textContent = longestLength + ' digits';
+                    document.getElementById('stat-pal-common').textContent = mostCommonLength + ' (' + frequencyByLength[mostCommonLength].toLocaleString() + ')';
+                    
+                    document.getElementById('stat-pal-nontrivial-total').textContent = totalNontrivial.toLocaleString();
+                    document.getElementById('stat-pal-nontrivial-unique').textContent = uniqueNontrivial.toLocaleString();
+                    document.getElementById('stat-pal-trivial-excluded').textContent = trivialExcluded.toLocaleString();
+                    document.getElementById('stat-pal-nontrivial-common').textContent = mostCommonLengthNT + ' (' + frequencyNontrivial[mostCommonLengthNT].toLocaleString() + ')';
+                    
+                    // ===== ALL PALINDROMES CHART =====
+                    const chartLengths = lengths.map(String);
+                    const chartFrequencies = lengths.map(len => frequencyByLength[len]);
+                    
+                    const palChartDom = document.getElementById('palindrome-chart');
+                    const palChart = echarts.init(palChartDom);
+                    const palChartOption = {
+                        title: {
+                            text: '',
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow'
+                            },
+                            formatter: function(params) {
+                                if (params.length > 0) {
+                                    const length = chartLengths[params[0].dataIndex];
+                                    const count = chartFrequencies[params[0].dataIndex];
+                                    const percentage = ((count / totalPalindromes) * 100).toFixed(2);
+                                    return `Length: <b>${length}</b><br/>Count: ${count.toLocaleString()}<br/>Percentage: ${percentage}%`;
+                                }
+                                return '';
+                            }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '3%',
+                            bottom: '3%',
+                            top: '3%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: chartLengths,
+                            name: 'Palindrome Length',
+                            nameLocation: 'middle',
+                            nameGap: 30
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: 'Frequency',
+                            nameLocation: 'middle',
+                            nameGap: 40
+                        },
+                        series: [
+                            {
+                                data: chartFrequencies,
+                                type: 'bar',
+                                itemStyle: {
+                                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                        { offset: 0, color: '#10b981' },
+                                        { offset: 0.5, color: '#06b6d4' },
+                                        { offset: 1, color: '#0ea5e9' }
+                                    ]),
+                                    borderRadius: [5, 5, 0, 0]
+                                },
+                                label: {
+                                    show: true,
+                                    position: 'top',
+                                    formatter: function(params) {
+                                        return params.value.toLocaleString();
+                                    },
+                                    fontSize: 11,
+                                    fontWeight: 'bold'
+                                },
+                                emphasis: {
+                                    itemStyle: {
+                                        opacity: 0.7
+                                    }
+                                }
+                            }
+                        ],
+                        animationDuration: 1000
+                    };
+                    palChart.setOption(palChartOption);
+                    
+                    // ===== NON-TRIVIAL PALINDROMES CHART =====
+                    const chartLengthsNT = lengthsNT.map(String);
+                    const chartFrequenciesNT = lengthsNT.map(len => frequencyNontrivial[len]);
+                    
+                    const palChartNTDom = document.getElementById('palindrome-nontrivial-chart');
+                    const palChartNT = echarts.init(palChartNTDom);
+                    const palChartNTOption = {
+                        title: {
+                            text: '',
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow'
+                            },
+                            formatter: function(params) {
+                                if (params.length > 0) {
+                                    const length = chartLengthsNT[params[0].dataIndex];
+                                    const count = chartFrequenciesNT[params[0].dataIndex];
+                                    const percentage = ((count / totalNontrivial) * 100).toFixed(2);
+                                    return `Length: <b>${length}</b><br/>Count: ${count.toLocaleString()}<br/>Percentage: ${percentage}%`;
+                                }
+                                return '';
+                            }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '3%',
+                            bottom: '3%',
+                            top: '3%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: chartLengthsNT,
+                            name: 'Palindrome Length',
+                            nameLocation: 'middle',
+                            nameGap: 30
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: 'Frequency',
+                            nameLocation: 'middle',
+                            nameGap: 40
+                        },
+                        series: [
+                            {
+                                data: chartFrequenciesNT,
+                                type: 'bar',
+                                itemStyle: {
+                                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                        { offset: 0, color: '#f59e0b' },
+                                        { offset: 0.5, color: '#ec4899' },
+                                        { offset: 1, color: '#8b5cf6' }
+                                    ]),
+                                    borderRadius: [5, 5, 0, 0]
+                                },
+                                label: {
+                                    show: true,
+                                    position: 'top',
+                                    formatter: function(params) {
+                                        return params.value.toLocaleString();
+                                    },
+                                    fontSize: 11,
+                                    fontWeight: 'bold'
+                                },
+                                emphasis: {
+                                    itemStyle: {
+                                        opacity: 0.7
+                                    }
+                                }
+                            }
+                        ],
+                        animationDuration: 1000
+                    };
+                    palChartNT.setOption(palChartNTOption);
+                    
+                    // Add to resize listener
+                    window.addEventListener('resize', function() {
+                        palChart.resize();
+                        palChartNT.resize();
+                    });
+                })
+                .catch(error => {
+                    console.error("Error loading palindrome data:", error);
+                    document.getElementById('stat-pal-total').textContent = 'Error loading palindrome JSON';
+                });
+
+            })
+            .catch(error => console.error("Error loading CSV:", error));
+    </script>
+</body>
+</html>
+

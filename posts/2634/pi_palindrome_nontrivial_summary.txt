@@ -1,0 +1,21 @@
+Non-Trivial Palindrome Analysis of Pi Decimal Digits
+(Excludes repeated digit palindromes like 44, 555, 666, etc.)
+================================================================================
+
+Total Non-Trivial Palindrome Occurrences: 99965
+Unique Non-Trivial Palindromes: 2804
+
+Frequency by Length:
+Length     Frequency 
+--------------------
+3          80973     
+4          8083      
+5          8947      
+6          877       
+7          874       
+8          94        
+9          98        
+10         9         
+11         8         
+12         1         
+13         1         

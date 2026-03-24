@@ -1,0 +1,21 @@
+Palindrome Analysis of Pi Decimal Digits
+================================================================================
+
+Total Palindrome Occurrences: 200019
+Unique Palindromes: 2852
+
+Frequency by Length:
+Length     Frequency 
+--------------------
+2          90062     
+3          89920     
+4          9018      
+5          9045      
+6          888       
+7          875       
+8          94        
+9          98        
+10         9         
+11         8         
+12         1         
+13         1         

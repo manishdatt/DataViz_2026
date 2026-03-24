@@ -1,0 +1,6 @@
+Longest Palindrome in Pi Decimal Digits
+================================================================================
+Length: 13
+Position: 879327 (1-indexed)
+Palindrome:
+9475082805749
