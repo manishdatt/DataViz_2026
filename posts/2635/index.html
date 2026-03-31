@@ -1,0 +1,400 @@
+---
+title: Coastal Ocean Temperature by Depth
+author: Manish Datt
+date: '2026-03-31'
+description: Temporal variations in average coastal ocean temperature at different depths in Nova Scotia, Canada.
+image: Ocean_temp.png
+categories:
+- Apache ECharts
+- TidyTuesday
+slug: 2635
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ocean Temperature Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/tabulator-tables@5.4.1/dist/css/tabulator.min.css" rel="stylesheet" />
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.4.1/dist/js/tabulator.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highcharts@11.0.0/highcharts.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highcharts@11.0.0/modules/exporting.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highcharts@11.0.0/modules/export-data.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 to-cyan-50 p-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-8">
+            <h1 class="text-4xl font-bold text-blue-900 mb-2">Coastal Ocean Temperature by Depth</h1>
+        </div>
+
+        <div id="raw-table-container" class="shadow-lg rounded-lg border border-blue-200 overflow-hidden mb-8"></div>
+        <div id="table-container" class="shadow-lg rounded-lg border border-blue-200 overflow-hidden mb-8"></div>
+
+        <div class="mb-8 shadow-lg rounded-lg border border-blue-200 bg-white p-6">
+            <h2 class="text-2xl font-bold text-blue-900 mb-4">Average Temperature by Month and Year</h2>
+            <div id="chart-container" style="height: 400px;"></div>
+        </div>
+
+        <div class="mb-8 shadow-lg rounded-lg border border-blue-200 bg-white p-6">
+            <h2 class="text-2xl font-bold text-blue-900 mb-4">Average Temperature by Month and Sensor Depth</h2>
+            <div id="chart-container-depth" style="height: 400px;"></div>
+        </div>
+
+
+        <div class="mb-8 shadow-lg rounded-lg border border-blue-200 bg-white p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-blue-900">3D Point Cloud (ECharts GL): Temperature by Month, Year &
+                    Depth</h2>
+                <button id="download-3d-btn"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Image
+                </button>
+            </div>
+            <div id="chart-container-echarts-3d" style="width: 100%; height: 700px;"></div>
+        </div>
+
+
+    </div>
+
+    <script>
+        // Parse CSV and load into Tabulator
+        fetch('./ocean_temperature.csv')
+            .then(response => response.text())
+            .then(data => {
+                // Parse CSV manually
+                const lines = data.trim().split('\n');
+                const headers = lines[0].split(',');
+                const rows = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',');
+                    const obj = {};
+                    for (let j = 0; j < headers.length; j++) {
+                        const value = values[j]?.trim();
+                        obj[headers[j]] = isNaN(value) ? value : parseFloat(value);
+                    }
+                    // Extract month and year from date
+                    if (obj.date) {
+                        const dateParts = obj.date.split('-');
+                        obj.month = parseInt(dateParts[1]);
+                        obj.year = parseInt(dateParts[0]);
+                    }
+                    rows.push(obj);
+                }
+
+                // Initialize Tabulator
+                const table = new Tabulator("#table-container", {
+                    data: rows,
+                    layout: "fitData", // Adjusted to fit content
+                    responsiveLayout: "collapse",
+                    pagination: "local",
+                    paginationSize: 5,
+                    paginationSizeSelector: [5, 10, 25, 50, 100],
+                    movableColumns: true,
+                    movableRows: false,
+                    columns: [
+                        { title: "Date", field: "date", sorter: "date" },
+                        { title: "Month", field: "month", sorter: "number" },
+                        { title: "Year", field: "year", sorter: "number" },
+                        { title: "Sensor Depth (m)", field: "sensor_depth_at_low_tide_m", sorter: "number" },
+                        { title: "Mean Temp (°C)", field: "mean_temperature_degree_c", sorter: "number", formatter: "money", formatterParams: { precision: 4, symbol: "" } },
+                        { title: "SD Temp (°C)", field: "sd_temperature_degree_c", sorter: "number", formatter: "money", formatterParams: { precision: 4, symbol: "" } },
+                        { title: "N Observations", field: "n_obs", sorter: "number" }
+                    ]
+                });
+
+                // Initialize Raw Data Tabulator (only CSV cols)
+                const rawTable = new Tabulator("#raw-table-container", {
+                    data: rows,
+                    layout: "fitColumns",
+                    responsiveLayout: "collapse",
+                    pagination: "local",
+                    paginationSize: 10,
+                    movableColumns: true,
+                    columns: [
+                        { title: "Date", field: "date", width: 120, sorter: "date" },
+                        { title: "Sensor Depth (m)", field: "sensor_depth_at_low_tide_m", width: 150, sorter: "number" },
+                        { title: "Mean Temp (°C)", field: "mean_temperature_degree_c", width: 150, sorter: "number", formatter: "money", formatterParams: { precision: 4, symbol: "" } },
+                        { title: "SD Temp (°C)", field: "sd_temperature_degree_c", width: 150, sorter: "number", formatter: "money", formatterParams: { precision: 4, symbol: "" } },
+                        { title: "N Observations", field: "n_obs", width: 120, sorter: "number" }
+                    ]
+                });
+
+                // Group by year and month, calculate mean temperature
+                const grouped = {};
+                rows.forEach(row => {
+                    const key = `${row.year}-${row.month}`;
+                    if (!grouped[key]) {
+                        grouped[key] = { year: row.year, month: row.month, temps: [] };
+                    }
+                    grouped[key].temps.push(row.mean_temperature_degree_c);
+                });
+
+                // Calculate averages and organize by year
+                const yearMap = {};
+                Object.values(grouped).forEach(item => {
+                    const avg = item.temps.reduce((a, b) => a + b, 0) / item.temps.length;
+                    if (!yearMap[item.year]) yearMap[item.year] = Array(12).fill(null);
+                    yearMap[item.year][item.month - 1] = avg;
+                });
+
+                // Create series for each year
+                const series = Object.keys(yearMap).sort().map(year => ({
+                    name: year,
+                    data: yearMap[year]
+                }));
+
+                // Get month labels (1-12)
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                // Debug: Check data completeness
+                console.log('Unique months from data:', Array.from(new Set(rows.map(r => r.month))).sort());
+                console.log('Year map keys:', Object.keys(yearMap).sort());
+                console.log('Sample year data (first year):', yearMap[Object.keys(yearMap)[0]]);
+
+                // Initialize Highcharts
+                Highcharts.chart('chart-container', {
+                    chart: { type: 'line' },
+                    title: { text: null },
+                    xAxis: { categories: months, title: { text: 'Month' } },
+                    yAxis: { title: { text: 'Average Temperature (°C)' } },
+                    legend: { layout: 'vertical', align: 'right', verticalAlign: 'middle' },
+                    plotOptions: { line: { dataLabels: { enabled: false }, enableMouseTracking: true } },
+                    series: series
+                });
+
+                // Group by month and sensor depth, calculate mean temperature
+                const groupedDepth = {};
+                rows.forEach(row => {
+                    const key = `${row.month}-${row.sensor_depth_at_low_tide_m}`;
+                    if (!groupedDepth[key]) {
+                        groupedDepth[key] = { month: row.month, depth: row.sensor_depth_at_low_tide_m, temps: [] };
+                    }
+                    groupedDepth[key].temps.push(row.mean_temperature_degree_c);
+                });
+
+                // Calculate averages and organize by depth
+                const depthMap = {};
+                Object.values(groupedDepth).forEach(item => {
+                    const avg = item.temps.reduce((a, b) => a + b, 0) / item.temps.length;
+                    if (!depthMap[item.depth]) depthMap[item.depth] = Array(12).fill(null);
+                    depthMap[item.depth][item.month - 1] = avg;
+                });
+
+                // Create series for each depth
+                const seriesDepth = Object.keys(depthMap).sort((a, b) => a - b).map(depth => ({
+                    name: `${depth}m`,
+                    data: depthMap[depth]
+                }));
+
+                // Initialize second chart
+                Highcharts.chart('chart-container-depth', {
+                    chart: { type: 'line' },
+                    title: { text: null },
+                    xAxis: { categories: months, title: { text: 'Month' } },
+                    yAxis: { title: { text: 'Average Temperature (°C)' } },
+                    legend: { layout: 'vertical', align: 'right', verticalAlign: 'middle' },
+                    plotOptions: { line: { dataLabels: { enabled: false }, enableMouseTracking: true } },
+                    series: seriesDepth
+                });
+
+                // Create 3D surface data (month x depth x year)
+                const uniqueDepths = Array.from(new Set(rows.map(r => r.sensor_depth_at_low_tide_m))).filter(d => d !== null && !isNaN(d)).sort((a, b) => a - b);
+                const reversedDepths = [...uniqueDepths].reverse(); // For inverted z-axis (shallow at bottom, deep at top)
+                const uniqueYears = Array.from(new Set(rows.map(r => r.year))).filter(y => y !== null && !isNaN(y)).sort();
+
+                // Aggregate by month, depth, AND year
+                const surfaceDataByYear = {};
+                uniqueYears.forEach(year => {
+                    surfaceDataByYear[year] = {};
+                });
+
+                rows.forEach(row => {
+                    const year = row.year;
+                    const key = `${row.month}-${row.sensor_depth_at_low_tide_m}`;
+                    if (!surfaceDataByYear[year][key]) {
+                        surfaceDataByYear[year][key] = [];
+                    }
+                    surfaceDataByYear[year][key].push(row.mean_temperature_degree_c);
+                });
+
+                // --- ECharts 3D Point Cloud ---
+                const echartsDom = document.getElementById('chart-container-echarts-3d');
+                if (echartsDom && typeof echarts !== 'undefined') {
+                    const myChart = echarts.init(echartsDom);
+
+                    const allTemps = rows.map(r => r.mean_temperature_degree_c).filter(t => !isNaN(t));
+                    const maxActualTemp = Math.max(...allTemps);
+                    const minActualTemp = Math.min(...allTemps);
+
+                    // Filter years to avoid too much overlap (e.g., just recent 5-10 years if too many)
+                    // But for consistency let's use all years first
+                    // Prepare scatter data for all points across all years, months, and depths
+                    const scatterData = [];
+                    uniqueYears.forEach((year, yearIdx) => {
+                        uniqueDepths.forEach((depth, depthIdx) => {
+                            for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
+                                const key = `${monthIdx + 1}-${depth}`;
+                                const temps = (surfaceDataByYear[year] && surfaceDataByYear[year][key]) || [];
+                                if (temps.length > 0) {
+                                    const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
+                                    // [x: month, y: year, z: depth index, val: temp]
+                                    const reversedDepthIdx = uniqueDepths.length - 1 - depthIdx;
+                                    scatterData.push([monthIdx, yearIdx, reversedDepthIdx, avg]);
+                                }
+                            }
+                        });
+                    });
+
+                    const echartsSeries = [{
+                        type: 'scatter3D',
+                        name: 'Ocean Temperature',
+                        data: scatterData,
+                        symbol: 'rect',
+                        symbolSize: 10,
+                        shading: 'lambert',
+                        label: {
+                            show: false
+                        },
+                        emphasis: {
+                            label: {
+                                show: false
+                            },
+                            itemStyle: {
+                                color: '#fff'
+                            }
+                        }
+                    }];
+
+                    const echartsOption = {
+                        backgroundColor: '#F5F5DC',
+                        title: {
+                            text: 'Temporal variations in coastal ocean temperature by depth',
+                            left: 'center',
+                            top: 90,
+                            textStyle: {
+                                color: '#333333',
+                                fontSize: 20
+                            }
+                        },
+                        tooltip: {
+                            formatter: function (params) {
+                                return `Month: ${months[params.value[0]]}<br/>Year: ${uniqueYears[params.value[1]]}<br/>Depth: ${reversedDepths[params.value[2]]}m<br/>Temp: ${params.value[3].toFixed(2)}°C`;
+                            }
+                        },
+                        visualMap: {
+                            show: true,
+                            dimension: 3, // Color based on the 4th value (temperature)
+                            min: minActualTemp,
+                            max: maxActualTemp,
+                            text: [`${maxActualTemp.toFixed(1)}°C`, `${minActualTemp.toFixed(1)}°C`],
+                            inRange: {
+                                // Applying the user-provided 4-color palette
+                                color: ['#111FA2', '#5478FF', '#F8843F', '#DA3D20']
+                            },
+                            right: '12%', // Moved closer to the chart
+                            top: 'center'
+                        },
+                        xAxis3D: {
+                            type: 'category',
+                            name: '',
+                            data: months,
+                            axisLine: { lineStyle: { opacity: 0 } },
+                            axisLabel: { show: true, interval: 0, textStyle: { fontSize: 14 } },
+                            axisTick: { show: true, alignWithLabel: true, interval: 0 },
+                            splitLine: { show: false },
+                            boundaryGap: true
+                        },
+                        yAxis3D: {
+                            type: 'category',
+                            name: '',
+                            data: uniqueYears.map(String),
+                            axisLine: { lineStyle: { opacity: 0 } },
+                            axisLabel: {
+                                show: true,
+                                interval: 0,
+                                hideOverlap: false,
+                                textStyle: { fontSize: 14 },
+                                formatter: function (value, index) {
+                                    if (index === 0 || index === uniqueYears.length - 1) {
+                                        return value;
+                                    }
+                                    return '';
+                                }
+                            },
+                            axisTick: {
+                                show: true,
+                                alignWithLabel: true,
+                                interval: 0
+                            },
+                            splitLine: { show: false },
+                            boundaryGap: true
+                        },
+                        zAxis3D: {
+                            type: 'category',
+                            name: '',
+                            data: reversedDepths.map(d => d + 'm'),
+                            axisLine: { lineStyle: { opacity: 0 } },
+                            axisLabel: { show: true, textStyle: { fontSize: 14 } },
+                            axisTick: { show: true, alignWithLabel: true, interval: 0 },
+                            splitLine: { show: false },
+                            boundaryGap: true
+                        },
+                        grid3D: {
+                            viewControl: {
+                                // autoRotate: true
+                                projection: 'orthographic',
+                                beta: 45,
+                                alpha: 20
+                            },
+                            boxWidth: 100,
+                            boxHeight: 80,
+                            boxDepth: 100,
+                            light: {
+                                main: { intensity: 1.2, shadow: true },
+                                ambient: { intensity: 0.3 }
+                            }
+                        },
+                        series: echartsSeries
+                    };
+
+                    myChart.setOption(echartsOption);
+                    window.addEventListener('resize', () => myChart.resize());
+
+                    // --- Download Handler ---
+                    document.getElementById('download-3d-btn').addEventListener('click', () => {
+                        // 3D charts in ECharts-GL are WebGL-based and don't support SVG, 
+                        // so we export to high-res PNG.
+                        const url = myChart.getDataURL({
+                            type: 'png',
+                            pixelRatio: 2, // Double DPI for high quality
+                            backgroundColor: '#fff',
+                            excludeComponents: ['toolbox']
+                        });
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = 'ocean_temp_3d_point_cloud.png';
+                        link.click();
+                    });
+                }
+            })
+            .catch(error => {
+                document.getElementById('table-container').innerHTML = '<div class="p-4 bg-red-100 text-red-800 rounded">Error loading CSV file: ' + error + '</div>';
+            });
+    </script>
+</body>
+
+{% enddemo %}
