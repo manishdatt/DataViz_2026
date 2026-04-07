@@ -1,0 +1,331 @@
+---
+title: Repair Cafes Worldwide
+author: Manish Datt
+date: '2026-04-07'
+description: Timeline of repair status under different categories.
+image: Repair_Cafes.png
+categories:
+- Highcharts
+- TidyTuesday
+slug: 2641
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repairs Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+    <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.0/highcharts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.0/modules/exporting.min.js"></script>
+    <script type="module">
+        import { getName } from 'https://cdn.jsdelivr.net/npm/country-list@2.3.0/+esm';
+        window.getCountryName = getName;
+    </script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">Repairs Data</h1>
+        <div id="repairs-table" class="mb-8"></div>
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">Repairs Timeline by Category</h1>
+        <button id="download-category-svg" class="mb-4 rounded bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-700">
+            Download Category Chart SVG
+        </button>
+        <div id="repairs-category-timeline" class="mb-8" style="height: 900px;"></div>
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">Repairs Timeline</h1>
+        <div id="repairs-timeline" class="mb-8" style="height: 1000px;"></div>
+    </div>
+    <script>
+        const csvCache = new Map();
+        let categoryTimelineChart = null;
+        const REPAIRS_CSV_SOURCES = [
+            './repairs.csv',
+            'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-04-07/repairs.csv'
+        ];
+
+        function loadCsv(sources) {
+            const sourceList = Array.isArray(sources) ? sources : [sources];
+            const cacheKey = sourceList.join('|');
+
+            if (!csvCache.has(cacheKey)) {
+                csvCache.set(cacheKey, (async () => {
+                    for (const source of sourceList) {
+                        try {
+                            const response = await fetch(source);
+                            if (response.ok) {
+                                return response.text();
+                            }
+                        } catch (error) {
+                            console.warn(`Failed to load CSV from ${source}`, error);
+                        }
+                    }
+
+                    throw new Error(`Unable to load CSV from any configured source: ${sourceList.join(', ')}`);
+                })());
+            }
+
+            return csvCache.get(cacheKey);
+        }
+
+        function parseCsv(csvData) {
+            const rows = csvData.split('\n').map(row => row.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')));
+            const headers = rows[0];
+            const dataRows = rows.slice(1).filter(row => row.length === headers.length && row.some(cell => cell !== ''));
+            return { headers, dataRows };
+        }
+
+        function createTabulator(tableId, sources) {
+            loadCsv(sources)
+                .then(csvData => {
+                    const { headers, dataRows } = parseCsv(csvData);
+                    const data = dataRows.map(row => {
+                        const obj = {};
+                        headers.forEach((header, i) => {
+                            obj[header] = row[i];
+                        });
+                        return obj;
+                    });
+
+                    const columns = headers.map(header => ({
+                        title: header,
+                        field: header,
+                        headerFilter: "input"
+                    }));
+
+                    new Tabulator(tableId, {
+                        data: data,
+                        columns: columns,
+                        layout: "fitColumns",
+                        pagination: "local",
+                        paginationSize: 10,
+                    });
+                });
+        }
+
+        function createTimeline(sources) {
+            loadCsv(sources)
+                .then(csvData => {
+                    const { headers, dataRows } = parseCsv(csvData);
+                    const repairDateIndex = headers.indexOf('repair_date');
+                    const repairedIndex = headers.findIndex(h => h.toLowerCase().includes('repaired'));
+                    const countryIndex = headers.indexOf('country');
+                    const categoryIndex = headers.indexOf('category');
+
+                    if (repairDateIndex === -1 || repairedIndex === -1 || countryIndex === -1 || categoryIndex === -1) {
+                        console.error('Required columns not found');
+                        return;
+                    }
+
+                    const countries = [...new Set(dataRows
+                        .filter(row => row[countryIndex] && row[countryIndex].trim() !== '')
+                        .map(row => row[countryIndex].trim()))];
+                    const categoryCounts = dataRows
+                        .filter(row => row[categoryIndex] && row[categoryIndex].trim() !== '')
+                        .reduce((acc, row) => {
+                            const category = row[categoryIndex].trim();
+                            acc[category] = (acc[category] || 0) + 1;
+                            return acc;
+                        }, {});
+                    const categories = Object.entries(categoryCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([category]) => category);
+                    const totalCategoryCount = categories.reduce((sum, category) => sum + categoryCounts[category], 0);
+                    const categoryAxisLabels = categories.map(category => {
+                        const rawPercentage = (categoryCounts[category] / totalCategoryCount) * 100;
+                        const percentage = rawPercentage < 0.1
+                            ? rawPercentage.toFixed(4).replace(/\.?0+$/, '')
+                            : rawPercentage.toFixed(1).replace(/\.0$/, '');
+                        return `${category} (${percentage}%)`;
+                    });
+
+                    const countryNames = countries.map(code => {
+                        let name = window.getCountryName ? window.getCountryName(code) : code;
+                        if (!name) name = code;
+                        if (name.includes('United Kingdom')) name = 'United Kingdom';
+                        return name;
+                    });
+
+                    const repairedCategories = ['yes', 'no', 'half'];
+
+                    const colors = ['#93c5fd', '#2563eb', '#38bdf8'];
+                    const symbols = ['circle', 'square', 'diamond'];
+                    const legendNames = ['Yes', 'No', 'Half'];
+                    const repairedOffsets = {
+                        yes: -0.2,
+                        no: 0,
+                        half: 0.2
+                    };
+                    const repairedStyle = {
+                        yes: { name: legendNames[0], color: colors[0], symbol: symbols[0] },
+                        no: { name: legendNames[1], color: colors[1], symbol: symbols[1] },
+                        half: { name: legendNames[2], color: colors[2], symbol: symbols[2] }
+                    };
+
+                    function buildSeries(items, itemIndex) {
+                        const itemPositions = new Map(items.map((item, idx) => [item, idx]));
+                        const seriesBuckets = new Map();
+                        const legendOrder = new Map(repairedCategories.map((status, idx) => [status, idx]));
+
+                        dataRows.forEach(row => {
+                            const repaired = row[repairedIndex] ? row[repairedIndex].trim().toLowerCase() : '';
+                            const item = row[itemIndex] ? row[itemIndex].trim() : '';
+                            if (!repairedCategories.includes(repaired) || !itemPositions.has(item) || !row[repairDateIndex]) {
+                                return;
+                            }
+
+                            const date = new Date(row[repairDateIndex].trim());
+                            if (isNaN(date.getTime())) {
+                                return;
+                            }
+
+                            const key = `${item}::${repaired}`;
+                            if (!seriesBuckets.has(key)) {
+                                const style = repairedStyle[repaired];
+                                seriesBuckets.set(key, {
+                                    item,
+                                    repaired,
+                                    name: style.name,
+                                    data: [],
+                                    color: style.color,
+                                    marker: { radius: 3, symbol: style.symbol },
+                                    showInLegend: itemPositions.get(item) === 0
+                                });
+                            }
+
+                            seriesBuckets.get(key).data.push([
+                                date.getTime(),
+                                itemPositions.get(item) + repairedOffsets[repaired]
+                            ]);
+                        });
+
+                        return Array.from(seriesBuckets.values())
+                            .sort((a, b) => {
+                                const itemDiff = itemPositions.get(a.item) - itemPositions.get(b.item);
+                                if (itemDiff !== 0) return itemDiff;
+                                return legendOrder.get(a.repaired) - legendOrder.get(b.repaired);
+                            })
+                            .map(({ item, repaired, ...series }) => series);
+                    }
+
+                    function createScatterChart(containerId, title, labels, seriesData, tooltipLabel, options = {}) {
+                        const displayLabels = options.displayLabels || labels;
+                        return Highcharts.chart(containerId, {
+                            chart: {
+                                type: 'scatter',
+                                backgroundColor: '#0b1f3a',
+                                style: {
+                                    color: '#d1d5db'
+                                }
+                            },
+                            title: {
+                                text: title,
+                                style: {
+                                    color: '#d1d5db',
+                                    fontSize: options.titleFontSize || '16px'
+                                }
+                            },
+                            xAxis: {
+                                type: 'datetime',
+                                title: { text: '' },
+                                labels: {
+                                    style: {
+                                        color: '#d1d5db',
+                                        fontSize: options.xAxisFontSize || '12px'
+                                    }
+                                },
+                                lineColor: '#94a3b8',
+                                tickColor: '#94a3b8'
+                            },
+                            yAxis: {
+                                title: { text: '' },
+                                categories: displayLabels,
+                                tickInterval: 1,
+                                min: 0,
+                                max: labels.length - 1,
+                                reversed: options.reversed || false,
+                                labels: {
+                                    style: {
+                                        color: '#d1d5db',
+                                        fontSize: options.yAxisFontSize || '12px'
+                                    }
+                                },
+                                gridLineColor: '#334155'
+                            },
+                            series: seriesData,
+                            credits: { enabled: false },
+                            legend: {
+                                itemStyle: {
+                                    color: '#d1d5db',
+                                    fontSize: options.legendFontSize || '12px'
+                                },
+                                itemHoverStyle: {
+                                    color: '#e5e7eb'
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#102a4c',
+                                style: {
+                                    color: '#d1d5db'
+                                },
+                                formatter: function() {
+                                    const date = new Date(this.x);
+                                    const labelIdx = Math.round(this.y);
+                                    const label = labels[labelIdx] || 'Unknown';
+                                    return `<b>${label}</b><br/>Date: ${date.toLocaleDateString()}<br/>${tooltipLabel}: ${this.series.name}`;
+                                }
+                            }
+                        });
+                    }
+
+                    const countrySeriesData = buildSeries(countries, countryIndex);
+                    const categorySeriesData = buildSeries(categories, categoryIndex);
+
+                    createScatterChart('repairs-timeline', 'Repairs Over Time by Country', countryNames, countrySeriesData, 'Repaired');
+                    categoryTimelineChart = createScatterChart('repairs-category-timeline', 'Timeline of repair status under different categories at the Repair Cafes worldwide', categories, categorySeriesData, 'Repaired', {
+                        displayLabels: categoryAxisLabels,
+                        reversed: true,
+                        titleFontSize: '28px',
+                        xAxisFontSize: '13px',
+                        yAxisFontSize: '15px',
+                        legendFontSize: '14px'
+                    });
+                });
+        }
+
+        function downloadCategoryChartSvg() {
+            if (!categoryTimelineChart || typeof categoryTimelineChart.getSVG !== 'function') {
+                console.error('Category chart is not ready for SVG export.');
+                return;
+            }
+
+            const svg = categoryTimelineChart.getSVG({
+                exporting: {
+                    sourceWidth: categoryTimelineChart.chartWidth,
+                    sourceHeight: categoryTimelineChart.chartHeight
+                }
+            });
+            const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'repairs-category-timeline.svg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('download-category-svg').addEventListener('click', downloadCategoryChartSvg);
+
+        createTabulator("#repairs-table", REPAIRS_CSV_SOURCES);
+        createTimeline(REPAIRS_CSV_SOURCES);
+    </script>
+</body>
+
+{% enddemo %}
