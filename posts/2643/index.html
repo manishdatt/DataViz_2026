@@ -1,0 +1,782 @@
+---
+title: Global Health Spending
+author: Manish Datt
+date: '2026-04-21'
+description: Purpose-wise distribution of top 10 countries with maximum health spending.
+image: health_spending.png
+categories:
+- Highcharts
+- TidyTuesday
+slug: 2643
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Spending Data - Tabulator Table</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.1/dist/css/tabulator_modern.min.css" rel="stylesheet">
+    <style>
+        .tabulator {
+            font-size: 13px;
+        }
+        .tabulator .tabulator-header {
+            background: #f8f9fa;
+        }
+        .tabulator .tabulator-row.tabulator-selectable:hover {
+            background-color: #f8f9fa;
+        }
+        .tabulator .tabulator-col[tabulator-field="iso3_code"] .tabulator-col-content {
+            justify-content: center;
+        }
+        .tabulator .tabulator-cell[tabulator-field="iso3_code"] {
+            font-family: monospace;
+            font-size: 11px;
+            background: #f0f0f0;
+            text-align: center;
+        }
+        .tabulator .tabulator-cell[tabulator-field="value"] {
+            font-family: monospace;
+            text-align: right;
+            font-weight: 500;
+        }
+        .tabulator .tabulator-cell[tabulator-field="unit"] {
+            color: #888;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-full mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-grey p-6">
+            <h1 class="text-2xl font-bold mb-2">World Health Spending Data</h1>
+            <p class="text-sm opacity-90">Current Health Expenditure and Related Indicators (2000-2023)</p>
+        </div>
+
+        <div class="p-4 bg-gray-50 border-b border-gray-200">
+            <div class="flex flex-wrap gap-4 items-center">
+                <input type="text" id="searchInput" placeholder="Search countries, codes, indicators..." 
+                    class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-64">
+                
+                <select id="yearFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Years</option>
+                </select>
+                
+                <select id="indicatorFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Indicators</option>
+                </select>
+                
+                <select id="countryFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Countries</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white">
+            <div id="healthTable"></div>
+        </div>
+
+        <div class="p-4 bg-gray-50 border-t border-gray-200">
+            <div id="healthStats" class="text-sm text-gray-600">
+                Loading data...
+            </div>
+        </div>
+    </div>
+
+    <!-- Second Table: Spending Purpose -->
+    <div class="max-w-full mx-auto bg-white rounded-lg shadow-lg overflow-hidden mt-8">
+        <div class="bg-gradient-to-r from-green-600 to-teal-600 text-grey p-6">
+            <h1 class="text-2xl font-bold mb-2">Health Spending by Purpose</h1>
+            <p class="text-sm opacity-90">Health Expenditure by Function/Purpose (2000-2023)</p>
+        </div>
+
+        <div class="p-4 bg-gray-50 border-b border-gray-200">
+            <div class="flex flex-wrap gap-4 items-center">
+                <input type="text" id="purposeSearchInput" placeholder="Search countries, codes, purposes..." 
+                    class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 flex-1 min-w-64">
+                
+                <select id="purposeYearFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <option value="">All Years</option>
+                </select>
+                
+                <select id="purposeIndicatorFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <option value="">All Indicators</option>
+                </select>
+                
+                <select id="purposeCountryFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <option value="">All Countries</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white">
+            <div id="purposeTable"></div>
+        </div>
+
+        <div class="p-4 bg-gray-50 border-t border-gray-200">
+            <div id="purposeStats" class="text-sm text-gray-600">
+                Loading data...
+            </div>
+        </div>
+    </div>
+
+    <!-- Third Table: Top 10 Countries Summary -->
+    <div class="max-w-full mx-auto bg-white rounded-lg shadow-lg overflow-hidden mt-8">
+        <div class="bg-gradient-to-r from-orange-600 to-red-600 text-grey p-6">
+            <h1 class="text-2xl font-bold mb-2">Top 10 Countries by Total Health Spending (USD 2023)</h1>
+            <p class="text-sm opacity-90">Sum of all *_usd2023 indicators per country (all years combined)</p>
+        </div>
+
+        <div class="p-4 bg-white">
+            <div id="summaryTable"></div>
+        </div>
+
+        <div class="p-4 bg-gray-50 border-t border-gray-200">
+            <div id="summaryStats" class="text-sm text-gray-600">
+                Loading summary...
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart: Country vs Spending Purpose Bubble Chart -->
+    <div class="max-w-full mx-auto bg-white rounded-lg shadow-lg overflow-hidden mt-8">
+        <div class="bg-gradient-to-r from-cyan-600 to-blue-600 text-grey p-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold mb-2">Health Spending Swarm Chart</h1>
+                    <p class="text-sm opacity-90">Top 10 Countries: Country (X-axis) vs Spending Purpose (Y-axis)</p>
+                </div>
+                <button id="downloadPng" disabled class="bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold text-sm opacity-50 cursor-not-allowed transition-all mr-3">
+                    Download PNG
+                </button>
+                <button id="downloadSvg" disabled class="bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold text-sm opacity-50 cursor-not-allowed transition-all">
+                    Download SVG
+                </button>
+            </div>
+        </div>
+
+        <div class="p-6 bg-white">
+            <div id="bubbleChart" style="height: 600px; width: 100%;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.1/dist/js/tabulator.min.js"></script>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+
+    <script>
+        // ============ Health Spending Table ============
+        let healthTable;
+        let healthData = [];
+
+        async function loadHealthCSV() {
+            try {
+                const response = await fetch('health_spending.csv');
+                const csvText = await response.text();
+                return parseCSV(csvText);
+            } catch (error) {
+                console.error('Error loading health CSV:', error);
+                return [];
+            }
+        }
+
+        function initHealthTable(data) {
+            healthTable = new Tabulator('#healthTable', {
+                data: data,
+                layout: 'fitColumns',
+                responsiveLayout: 'hide',
+                pagination: 'local',
+                paginationSize: 10,
+                paginationSizeSelector: [10, 25, 50, 100],
+                movableColumns: true,
+                initialSort: [{column: 'country_name', dir: 'asc'}, {column: 'year', dir: 'desc'}],
+                columns: [
+                    {title: 'Country', field: 'country_name', sorter: 'string', width: 180, minWidth: 150},
+                    {title: 'ISO3', field: 'iso3_code', sorter: 'string', width: 80, minWidth: 70, hozAlign: 'center'},
+                    {title: 'Year', field: 'year', sorter: 'number', width: 80, minWidth: 70},
+                    {title: 'Indicator Code', field: 'indicator_code', sorter: 'string', width: 200, minWidth: 150},
+                    {title: 'Expenditure Type', field: 'expenditure_type', sorter: 'string', width: 220, minWidth: 180},
+                    {title: 'Value', field: 'value', sorter: 'number', formatter: valueFormatter, width: 100, minWidth: 80},
+                    {title: 'Unit', field: 'unit', sorter: 'string', width: 160, minWidth: 120},
+                ],
+                rowFormatter: function(row) {
+                    if (row.getIndex() % 2 === 0) {
+                        row.getElement().style.backgroundColor = '#fafafa';
+                    }
+                }
+            });
+        }
+
+        function updateHealthFilters() {
+            const yearFilter = document.getElementById('yearFilter');
+            const indicatorFilter = document.getElementById('indicatorFilter');
+            const countryFilter = document.getElementById('countryFilter');
+
+            const years = [...new Set(healthData.map(d => d.year))].sort((a, b) => b - a);
+            yearFilter.innerHTML = '<option value="">All Years</option>' +
+                years.map(y => `<option value="${y}">${y}</option>`).join('');
+
+            const indicators = [...new Set(healthData.map(d => d.indicator_code))].sort();
+            indicatorFilter.innerHTML = '<option value="">All Indicators</option>' +
+                indicators.map(i => `<option value="${i}">${i}</option>`).join('');
+
+            const countries = [...new Set(healthData.map(d => d.country_name))].sort();
+            countryFilter.innerHTML = '<option value="">All Countries</option>' +
+                countries.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        function applyHealthFilters() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const year = document.getElementById('yearFilter').value;
+            const indicator = document.getElementById('indicatorFilter').value;
+            const country = document.getElementById('countryFilter').value;
+
+            healthTable.setFilter(function(data) {
+                const matchesSearch = 
+                    data.country_name.toLowerCase().includes(search) ||
+                    data.iso3_code.toLowerCase().includes(search) ||
+                    data.indicator_code.toLowerCase().includes(search) ||
+                    data.expenditure_type.toLowerCase().includes(search);
+
+                return (!year || data.year === year) &&
+                       (!indicator || data.indicator_code === indicator) &&
+                       (!country || data.country_name === country) &&
+                       matchesSearch;
+            });
+        }
+
+        function updateHealthStats() {
+            const countries = new Set(healthData.map(d => d.country_name)).size;
+            const yearsSpan = healthData.reduce((min, d) => Math.min(min, parseInt(d.year)), 9999) + ' - ' +
+                             healthData.reduce((max, d) => Math.max(max, parseInt(d.year)), 0);
+            const indicators = new Set(healthData.map(d => d.indicator_code)).size;
+            const totalRecords = healthData.length;
+
+            document.getElementById('healthStats').innerHTML = `
+                <strong>Summary:</strong> ${countries} countries | Years: ${yearsSpan} | ${indicators} indicators | 
+                ${totalRecords.toLocaleString()} total records | Showing ${healthTable.getDataCount()} of ${totalRecords} records
+            `;
+        }
+
+        // ============ Spending Purpose Table ============
+        let purposeTable;
+        let purposeData = [];
+
+        async function loadPurposeCSV() {
+            try {
+                const response = await fetch('spending_purpose.csv');
+                const csvText = await response.text();
+                return parseCSV(csvText);
+            } catch (error) {
+                console.error('Error loading purpose CSV:', error);
+                return [];
+            }
+        }
+
+        function initPurposeTable(data) {
+            purposeTable = new Tabulator('#purposeTable', {
+                data: data,
+                layout: 'fitColumns',
+                responsiveLayout: 'hide',
+                pagination: 'local',
+                paginationSize: 10,
+                paginationSizeSelector: [10, 25, 50, 100],
+                movableColumns: true,
+                initialSort: [{column: 'country_name', dir: 'asc'}, {column: 'year', dir: 'desc'}],
+                columns: [
+                    {title: 'Country', field: 'country_name', sorter: 'string', width: 180, minWidth: 150},
+                    {title: 'ISO3', field: 'iso3_code', sorter: 'string', width: 80, minWidth: 70, hozAlign: 'center'},
+                    {title: 'Year', field: 'year', sorter: 'number', width: 80, minWidth: 70},
+                    {title: 'Indicator Code', field: 'indicator_code', sorter: 'string', width: 180, minWidth: 140},
+                    {title: 'Spending Purpose', field: 'spending_purpose', sorter: 'string', width: 220, minWidth: 180},
+                    {title: 'Value', field: 'value', sorter: 'number', formatter: valueFormatter, width: 100, minWidth: 80},
+                    {title: 'Unit', field: 'unit', sorter: 'string', width: 160, minWidth: 120},
+                ],
+                rowFormatter: function(row) {
+                    if (row.getIndex() % 2 === 0) {
+                        row.getElement().style.backgroundColor = '#fafafa';
+                    }
+                }
+            });
+        }
+
+        function updatePurposeFilters() {
+            const yearFilter = document.getElementById('purposeYearFilter');
+            const indicatorFilter = document.getElementById('purposeIndicatorFilter');
+            const countryFilter = document.getElementById('purposeCountryFilter');
+
+            const years = [...new Set(purposeData.map(d => d.year))].sort((a, b) => b - a);
+            yearFilter.innerHTML = '<option value="">All Years</option>' +
+                years.map(y => `<option value="${y}">${y}</option>`).join('');
+
+            const indicators = [...new Set(purposeData.map(d => d.indicator_code))].sort();
+            indicatorFilter.innerHTML = '<option value="">All Indicators</option>' +
+                indicators.map(i => `<option value="${i}">${i}</option>`).join('');
+
+            const countries = [...new Set(purposeData.map(d => d.country_name))].sort();
+            countryFilter.innerHTML = '<option value="">All Countries</option>' +
+                countries.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        function applyPurposeFilters() {
+            const search = document.getElementById('purposeSearchInput').value.toLowerCase();
+            const year = document.getElementById('purposeYearFilter').value;
+            const indicator = document.getElementById('purposeIndicatorFilter').value;
+            const country = document.getElementById('purposeCountryFilter').value;
+
+            purposeTable.setFilter(function(data) {
+                const matchesSearch = 
+                    data.country_name.toLowerCase().includes(search) ||
+                    data.iso3_code.toLowerCase().includes(search) ||
+                    data.indicator_code.toLowerCase().includes(search) ||
+                    data.spending_purpose.toLowerCase().includes(search);
+
+                return (!year || data.year === year) &&
+                       (!indicator || data.indicator_code === indicator) &&
+                       (!country || data.country_name === country) &&
+                       matchesSearch;
+            });
+        }
+
+        function updatePurposeStats() {
+            const countries = new Set(purposeData.map(d => d.country_name)).size;
+            const yearsSpan = purposeData.reduce((min, d) => Math.min(min, parseInt(d.year)), 9999) + ' - ' +
+                             purposeData.reduce((max, d) => Math.max(max, parseInt(d.year)), 0);
+            const indicators = new Set(purposeData.map(d => d.indicator_code)).size;
+            const purposes = new Set(purposeData.map(d => d.spending_purpose)).size;
+            const totalRecords = purposeData.length;
+
+            document.getElementById('purposeStats').innerHTML = `
+                <strong>Summary:</strong> ${countries} countries | Years: ${yearsSpan} | ${indicators} indicators | 
+                ${purposes} spending purposes | ${totalRecords.toLocaleString()} total records | 
+                Showing ${purposeTable.getDataCount()} of ${totalRecords} records
+            `;
+        }
+
+        // ============ Shared Functions ============
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            const headers = lines[0].split(',');
+            const result = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const row = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let char of lines[i]) {
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        row.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                row.push(current);
+
+                if (row.length === headers.length) {
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                        obj[h.trim()] = row[idx]?.trim() || '';
+                    });
+                    result.push(obj);
+                }
+            }
+            return result;
+        }
+
+        function formatNumber(num) {
+            const n = parseFloat(num);
+            if (isNaN(n)) return num;
+            if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(2) + ' B';
+            if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + ' M';
+            if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(2) + ' K';
+            return n.toFixed(2);
+        }
+
+        function valueFormatter(cell) {
+            return formatNumber(cell.getValue());
+        }
+
+        // ============ Initialize Both Tables ============
+        async function init() {
+            document.getElementById('healthStats').textContent = 'Downloading health spending data...';
+            document.getElementById('purposeStats').textContent = 'Downloading spending purpose data...';
+
+            // Load both datasets in parallel
+            [healthData, purposeData] = await Promise.all([
+                loadHealthCSV(),
+                loadPurposeCSV()
+            ]);
+
+            if (healthData.length === 0) {
+                document.getElementById('healthStats').textContent = 'Error: health_spending.csv not found.';
+            } else {
+                initHealthTable(healthData);
+                updateHealthFilters();
+                updateHealthStats();
+
+                document.getElementById('searchInput').addEventListener('input', applyHealthFilters);
+                document.getElementById('yearFilter').addEventListener('change', applyHealthFilters);
+                document.getElementById('indicatorFilter').addEventListener('change', applyHealthFilters);
+                document.getElementById('countryFilter').addEventListener('change', applyHealthFilters);
+            }
+
+            if (purposeData.length === 0) {
+                document.getElementById('purposeStats').textContent = 'Error: spending_purpose.csv not found.';
+            } else {
+                initPurposeTable(purposeData);
+                updatePurposeFilters();
+                updatePurposeStats();
+
+                document.getElementById('purposeSearchInput').addEventListener('input', applyPurposeFilters);
+                document.getElementById('purposeYearFilter').addEventListener('change', applyPurposeFilters);
+                document.getElementById('purposeIndicatorFilter').addEventListener('change', applyPurposeFilters);
+                document.getElementById('purposeCountryFilter').addEventListener('change', applyPurposeFilters);
+            }
+
+            // ============ Summary: Top 10 Countries by USD 2023 Spending ============
+            if (purposeData.length > 0) {
+                // Filter for *_usd2023 indicators only
+                const usdData = purposeData.filter(d => d.indicator_code.includes('_usd2023'));
+                
+                // Aggregate total spending by country
+                const countryTotals = {};
+                usdData.forEach(row => {
+                    const country = row.country_name;
+                    const value = parseFloat(row.value) || 0;
+                    countryTotals[country] = (countryTotals[country] || 0) + value;
+                });
+
+                // Get top 10 countries
+                const sortedCountries = Object.entries(countryTotals)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+
+                // Get spending purposes breakdown for each top country
+                const summaryData = [];
+                sortedCountries.forEach(([country, total], rank) => {
+                    const countryRows = usdData.filter(d => d.country_name === country);
+                    // Group by spending_purpose
+                    const purposeBreakdown = {};
+                    countryRows.forEach(row => {
+                        const purpose = row.spending_purpose;
+                        const value = parseFloat(row.value) || 0;
+                        purposeBreakdown[purpose] = (purposeBreakdown[purpose] || 0) + value;
+                    });
+
+                    // Add a row for each spending purpose with rank attached
+                    Object.entries(purposeBreakdown)
+                        .sort((a, b) => b[1] - a[1])
+                        .forEach(([purpose, value], idx) => {
+                            summaryData.push({
+                                rank: parseInt(rank) + 1,
+                                country_name: country,
+                                total_spending: parseFloat(total),
+                                spending_purpose: purpose,
+                                purpose_value: parseFloat(value),
+                                iso3_code: countryRows[0]?.iso3_code || ''
+                            });
+                        });
+                });
+
+                // Sort by rank ASC, then purpose_value DESC
+                summaryData.sort((a, b) => {
+                    if (a.rank !== b.rank) return a.rank - b.rank;
+                    return b.purpose_value - a.purpose_value;
+                });
+
+                initSummaryTable(summaryData);
+                updateSummaryStats(summaryData);
+                initSwarmChart(summaryData);
+            }
+        }
+
+        function updateSummaryStats(summaryData) {
+            const countryTotals = {};
+            summaryData.forEach(row => {
+                const country = row.country_name;
+                countryTotals[country] = row.total_spending;
+            });
+            const totalGlobal = Object.values(countryTotals).reduce((sum, t) => sum + t, 0);
+            const top10Countries = Object.keys(countryTotals).length;
+
+            document.getElementById('summaryStats').innerHTML = `
+                <strong>Top ${top10Countries} Countries by Total Health Spending (USD 2023):</strong> Showing spending breakdown by purpose. 
+                Combined total: ${formatNumber(totalGlobal)} USD
+            `;
+        }
+
+        // ============ Swarm Chart ============
+        let summaryTable;
+
+        function initSummaryTable(data) {
+            summaryTable = new Tabulator('#summaryTable', {
+                data: data,
+                layout: 'fitColumns',
+                responsiveLayout: 'hide',
+                pagination: 'local',
+            paginationSize: 10,
+            paginationSizeSelector: [10, 25, 50],
+            movableColumns: true,
+            columns: [
+                    {title: 'Rank', field: 'rank', sorter: 'number', width: 70, minWidth: 60, hozAlign: 'center'},
+                    {title: 'Country', field: 'country_name', sorter: 'string', width: 180, minWidth: 150},
+                    {title: 'ISO3', field: 'iso3_code', sorter: 'string', width: 80, minWidth: 70, hozAlign: 'center'},
+                    {title: 'Total Spending', field: 'total_spending', sorter: 'number', formatter: valueFormatter, width: 160, minWidth: 140},
+                    {title: 'Spending Purpose', field: 'spending_purpose', sorter: 'string', width: 240, minWidth: 200},
+                    {title: 'Purpose Value', field: 'purpose_value', sorter: 'number', formatter: valueFormatter, width: 160, minWidth: 140},
+                ],
+                rowFormatter: function(row) {
+                    if (row.getIndex() % 2 === 0) {
+                        row.getElement().style.backgroundColor = '#fafafa';
+                    }
+                }
+            });
+        }
+
+        // ============ Swarm/Dot-Density Chart ============
+        let swarmChart;
+
+        function initSwarmChart(summaryData) {
+            // Configuration: 1 dot = 10B USD
+            const UNIT = 10e9; // 10 billion USD per dot
+
+            // Get unique countries (already in rank order from summaryData)
+            const countries = [...new Set(summaryData.map(d => d.country_name))];
+            const countryIndex = {};
+            countries.forEach((c, i) => countryIndex[c] = i);
+
+            // Get all unique spending purposes from all countries
+            const allPurposesSet = new Set(summaryData.map(d => d.spending_purpose));
+            
+            const top1Country = countries[0];
+            const top1CountryData = summaryData.filter(d => d.country_name === top1Country && d.purpose_value > 0);
+            
+            // Get ordering from #1 country, then append any missing purposes alphabetically
+            const top1Order = top1CountryData
+                .sort((a, b) => b.purpose_value - a.purpose_value) // descending: largest at index 0 → top (yAxis reversed)
+                .map(d => d.spending_purpose);
+            const missingPurposes = [...allPurposesSet]
+                .filter(p => !top1Order.includes(p))
+                .sort();
+            const allPurposes = [...top1Order, ...missingPurposes];
+
+            // Generate dot-density points
+            // Scaling: < 1T => 1 dot = 10B (small teal), >= 1T => 1 dot = 1T (large orange)
+            const points = [];
+            summaryData.forEach(d => {
+                const baseX = countryIndex[d.country_name];
+                const purposeIdx = allPurposes.indexOf(d.spending_purpose);
+                if (purposeIdx === -1) return; // skip purposes not in category list
+                const baseY = purposeIdx;
+
+                let dotCount, markerConfig;
+                const val = d.purpose_value;
+                if (val >= 1e12) {
+                    dotCount = Math.round(val / 1e12);
+                    markerConfig = { radius: 7, fillColor: 'rgba(255, 200, 100, 1)', lineWidth: 2, lineColor: 'rgba(255, 143, 0, 1)' };
+                } else if (val >= 100e9) {
+                    // 100B–1T: 1 dot per 100B, medium, purple
+                    dotCount = Math.round(val / 100e9);
+                    markerConfig = { radius: 5, fillColor: 'rgba(216, 180, 254, 1)', lineWidth: 2, lineColor: 'rgba(168, 85, 247, 1)' };
+                } else {
+                    // <100B: 1 dot per 10B, small, teal
+                    dotCount = Math.round(val / UNIT);
+                    markerConfig = { radius: 3, fillColor: 'rgba(165, 243, 252, 1)', lineWidth: 1, lineColor: 'rgba(6, 182, 212, 1)' };
+                }
+                if (dotCount <= 0) return;
+                
+                // Compute grid layout with consistent spacing for smaller grids
+                const gridSize = Math.ceil(Math.sqrt(dotCount));
+                const desiredSpacing = 0.15; // fixed dot spacing for up to 5x5 grid
+                const maxSpan = 0.6; // total available cell span
+                let gridStep, span, startOffset;
+                
+                if (gridSize <= 1) {
+                    gridStep = 0;
+                    startOffset = 0;
+                } else {
+                    const requiredStep = maxSpan / (gridSize - 1);
+                    gridStep = Math.min(desiredSpacing, requiredStep);
+                    span = gridStep * (gridSize - 1);
+                    startOffset = -span / 2; // center the grid within the cell
+                }
+
+                for (let i = 0; i < dotCount; i++) {
+                    const col = i % gridSize;
+                    const row = Math.floor(i / gridSize);
+                    const x = baseX + startOffset + col * gridStep;
+                    const y = baseY + startOffset + row * gridStep;
+                     points.push({
+                         x: x,
+                         y: y,
+                         country: d.country_name,
+                         iso3: d.iso3_code,
+                         purpose: d.spending_purpose,
+                         value: d.purpose_value,
+                         total: d.total_spending,
+                         rank: d.rank,
+                         marker: markerConfig
+                     });
+                 }
+            });
+
+            swarmChart = Highcharts.chart('bubbleChart', {
+                chart: {
+                    type: 'scatter',
+                    backgroundColor: '#333333',
+                    plotBorderWidth: 0,
+                    zoomType: 'xy',
+                    spacingTop: 50,
+                    width: document.getElementById('bubbleChart').offsetWidth,
+                    height: 600
+                },
+                title: { 
+                    text: 'Purpose-wise distribution of top 10 countries with maximum spending on healthcare. Dots represent <span style="color: rgba(165, 243, 252, 1);">$10B</span>, <span style="color: rgba(216, 180, 254, 1);">$100B</span>, and <span style="color: rgba(255, 200, 100, 1);">$1T</span>.',
+                    align: 'left',
+                    style: { fontSize: '16px', fontWeight: 'bold', color: '#eee' },
+                    margin: 20
+                },
+                credits: { enabled: false },
+                exporting: {
+                    enabled: true,
+                    scale: 1,
+                    buttons: {
+                        contextButton: {
+                            enabled: false
+                        }
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    title: { text: '' },
+                    categories: countries,
+                    gridLineWidth: 0,
+                    labels: {
+                        style: { fontSize: '14px', color: '#eee' },
+                        formatter: function() {
+                            // Rename long country names
+                            const rename = {
+                                'United States of America': 'USA',
+                                'United Kingdom of Great Britain and Northern Ireland': 'UK'
+                            };
+                            const name = rename[this.value] || this.value;
+                            // Truncate if still too long
+                            return name.length > 15 ? name.substring(0, 12) + '...' : name;
+                        }
+                    },
+                    tickPositioner: function() {
+                        return Array.from({ length: this.categories.length }, (_, i) => i);
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    title: { text: '' },
+                    categories: allPurposes,
+                    reversed: true,
+                    gridLineWidth: 0.25,
+                    labels: { 
+                        style: { fontSize: '14px', color: '#eee' },
+                        useHTML: true,
+                        formatter: function() {
+                            const words = this.value.split(' ');
+                            if (words.length <= 3) return this.value;
+                            const lines = [];
+                            for (let i = 0; i < words.length; i += 3) {
+                                lines.push(words.slice(i, i + 3).join(' '));
+                            }
+                            return lines.join('<br/>');
+                        }
+                    },
+                    tickPositioner: function() {
+                        return Array.from({ length: this.categories.length }, (_, i) => i);
+                    }
+                },
+                tooltip: {
+                    useHTML: true,
+                    formatter: function() {
+                        const point = this.point;
+                        // Compute dot count based on tier
+                        let dotCount, dotLabel;
+                        if (point.value >= 1e12) {
+                            dotCount = Math.round(point.value / 1e12);
+                            dotLabel = '1T';
+                        } else if (point.value >= 100e9) {
+                            dotCount = Math.round(point.value / 100e9);
+                            dotLabel = '100B';
+                        } else {
+                            dotCount = Math.round(point.value / 10e9);
+                            dotLabel = '10B';
+                        }
+                        return `
+                            <div style="padding:8px;">
+                                <strong>#${point.rank} ${point.country} (${point.iso3})</strong><br/>
+                                <span style="color:#666;">${point.purpose}</span><br/>
+                                <strong>${formatNumber(point.value)} USD 2023</strong><br/>
+                                <span style="color:#888;font-size:11px;">Total: ${formatNumber(point.total)}</span><br/>
+                                <span style="color:#999;font-size:10px;">Dot density: ~${dotCount} dot${dotCount!==1?'s':''} (1 dot = ${dotLabel})</span>
+                            </div>
+                        `;
+                    }
+                },
+                legend: { enabled: false },
+                series: [{
+                    name: 'Health Spending Density',
+                    data: points
+                }]
+            });
+
+            // Enable download buttons now that chart is ready
+            const pngBtn = document.getElementById('downloadPng');
+            const svgBtn = document.getElementById('downloadSvg');
+            
+            if (pngBtn) {
+                pngBtn.disabled = false;
+                pngBtn.textContent = 'Download PNG';
+                pngBtn.style.opacity = '1';
+                pngBtn.style.cursor = 'pointer';
+                pngBtn.onclick = function() {
+                    console.log('PNG download clicked');
+                    swarmChart.exportChart({
+                        type: 'image/png',
+                        filename: 'health_spending_top10_countries'
+                    });
+                };
+            }
+            
+            if (svgBtn) {
+                svgBtn.disabled = false;
+                svgBtn.textContent = 'Download SVG';
+                svgBtn.style.opacity = '1';
+                svgBtn.style.cursor = 'pointer';
+                svgBtn.onclick = function() {
+                    console.log('SVG download clicked');
+                    const svg = swarmChart.getSVG();
+                    const blob = new Blob([svg], {type: 'image/svg+xml'});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'health_spending_top10_countries.svg';
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 0);
+                };
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+{% enddemo %}
