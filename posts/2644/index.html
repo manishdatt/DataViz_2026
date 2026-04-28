@@ -1,0 +1,681 @@
+---
+title: US Agricultural Tariffs
+author: Manish Datt
+date: '2026-04-28'
+description: US tariff on milk and tobacco items as per different agreements.
+image: US_tariff.png
+categories:
+- Highcharts
+- TidyTuesday
+slug: 2644
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tariff Agricultural Table</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        font-family: Georgia, "Times New Roman", serif;
+        background:
+          radial-gradient(circle at top left, rgba(245, 158, 11, 0.18), transparent 28%),
+          radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 24%),
+          linear-gradient(180deg, #fef7ed 0%, #fffaf2 44%, #f8fafc 100%);
+      }
+
+      #tariff-table,
+      #codes-table,
+      #joined-table,
+      #milk-chart {
+        overflow-x: auto;
+      }
+
+      .tabulator {
+        min-width: 1000px;
+        border: none;
+        border-radius: 1rem;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+      }
+
+      .tabulator .tabulator-header {
+        border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+        background: #fff7ed;
+      }
+
+      .tabulator .tabulator-header .tabulator-col {
+        background: transparent;
+        border-right: 1px solid rgba(148, 163, 184, 0.15);
+      }
+
+      .tabulator .tabulator-row {
+        border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+      }
+
+      .tabulator .tabulator-row:nth-child(even) {
+        background: rgba(248, 250, 252, 0.85);
+      }
+
+      .tabulator .tabulator-row:hover {
+        background: rgba(254, 243, 199, 0.45);
+      }
+
+      .tabulator .tabulator-footer {
+        border-top: 1px solid rgba(148, 163, 184, 0.3);
+        background: rgba(255, 247, 237, 0.75);
+      }
+
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-900">
+    <main class="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+      <section class="mb-6 overflow-hidden rounded-[28px] border border-amber-200/80 bg-white/70 shadow-[0_20px_80px_rgba(15,23,42,0.10)] backdrop-blur">
+        <div class="grid gap-8 px-6 py-8 lg:grid-cols-[1.3fr_0.7fr] lg:px-8">
+          <div>
+            <h1 class="max-w-3xl text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl">
+              Agricultural tariff records, browsable in one clean table
+            </h1>
+          </div>
+          <div class="grid gap-4 rounded-3xl bg-slate-900 px-5 py-5 text-slate-50 shadow-inner">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-amber-300">Data File</p>
+              <p class="mt-2 text-lg font-semibold">tariff_agricultural.csv</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="rounded-2xl bg-white/10 p-4">
+                <p class="text-slate-300">Columns</p>
+                <p id="column-count" class="mt-1 text-2xl font-semibold text-white">7</p>
+              </div>
+              <div class="rounded-2xl bg-white/10 p-4">
+                <p class="text-slate-300">Rows</p>
+                <p id="row-count" class="mt-1 text-2xl font-semibold text-white">Loading</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <div class="mb-5 grid gap-4 rounded-[24px] border border-slate-200/80 bg-white/80 p-4 shadow-[0_14px_50px_rgba(15,23,42,0.08)] backdrop-blur md:grid-cols-[minmax(0,1fr)_220px_180px]">
+          <label class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-slate-700">Search agricultural table</span>
+            <input
+              id="agri-search"
+              type="search"
+              placeholder="Try hts8, agreement, or a date..."
+              class="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+            />
+          </label>
+          <label class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-slate-700">Agreement</span>
+            <select
+              id="agri-agreement-filter"
+              class="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            >
+              <option value="">All agreements</option>
+            </select>
+          </label>
+          <div class="flex items-end">
+            <button
+              id="agri-reset-filters"
+              class="h-12 w-full rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
+              type="button"
+            >
+              Reset filters
+            </button>
+          </div>
+        </div>
+
+        <div id="agri-status" class="mb-4 text-sm text-slate-600">Loading agricultural CSV data...</div>
+        <div id="tariff-table"></div>
+      </section>
+
+      <section class="mt-6 border-t border-slate-200/80 pt-10">
+        <div class="mb-6 flex items-end justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.32em] text-sky-700">Reference Codes</p>
+            <h2 class="mt-2 text-3xl font-semibold text-slate-900">Tariff code descriptions</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              A second lookup table for HTS8 descriptions and quantity codes, shown directly below
+              the agricultural tariff records.
+            </p>
+          </div>
+          <div class="rounded-2xl bg-sky-50 px-4 py-3 text-right">
+            <p class="text-xs uppercase tracking-[0.28em] text-sky-700">Rows</p>
+            <p id="codes-row-count" class="mt-1 text-2xl font-semibold text-slate-900">Loading</p>
+          </div>
+        </div>
+
+        <div class="mb-5 grid gap-4 rounded-[24px] border border-slate-200/80 bg-white/80 p-4 shadow-[0_14px_50px_rgba(15,23,42,0.08)] backdrop-blur md:grid-cols-[minmax(0,1fr)_180px]">
+          <label class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-slate-700">Search code table</span>
+            <input
+              id="codes-search"
+              type="search"
+              placeholder="Try hts8, description, or code..."
+              class="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            />
+          </label>
+          <div class="flex items-end">
+            <button
+              id="codes-reset-filters"
+              class="h-12 w-full rounded-2xl bg-sky-700 px-4 text-sm font-semibold text-white transition hover:bg-sky-800"
+              type="button"
+            >
+              Reset search
+            </button>
+          </div>
+        </div>
+
+        <div id="codes-status" class="mb-4 text-sm text-slate-600">Loading tariff code CSV data...</div>
+        <div id="codes-table"></div>
+      </section>
+
+      <section class="mt-6 border-t border-slate-200/80 pt-10">
+        <div class="mb-6 flex items-end justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.32em] text-emerald-700">Joined View</p>
+            <h2 class="mt-2 text-3xl font-semibold text-slate-900">Agricultural tariffs with descriptions</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              This combined table joins both datasets on HTS8 and adds the code description alongside
+              the agricultural tariff fields.
+            </p>
+          </div>
+          <div class="rounded-2xl bg-emerald-50 px-4 py-3 text-right">
+            <p class="text-xs uppercase tracking-[0.28em] text-emerald-700">Rows</p>
+            <p id="joined-row-count" class="mt-1 text-2xl font-semibold text-slate-900">Loading</p>
+          </div>
+        </div>
+
+        <div class="mb-5 grid gap-4 rounded-[24px] border border-slate-200/80 bg-white/80 p-4 shadow-[0_14px_50px_rgba(15,23,42,0.08)] backdrop-blur md:grid-cols-[minmax(0,1fr)_180px]">
+          <label class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-slate-700">Search joined table</span>
+            <input
+              id="joined-search"
+              type="search"
+              placeholder="Try hts8, agreement, or description..."
+              class="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+            />
+          </label>
+          <div class="flex items-end">
+            <button
+              id="joined-reset-filters"
+              class="h-12 w-full rounded-2xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
+              type="button"
+            >
+              Reset search
+            </button>
+          </div>
+        </div>
+
+        <div id="joined-status" class="mb-4 text-sm text-slate-600">Loading joined CSV data...</div>
+        <div id="joined-table"></div>
+      </section>
+
+      <section class="mt-6 border-t border-slate-200/80 pt-10">
+        <div class="mb-6 flex items-end justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.32em] text-rose-700">Milk and Tobacco Rates</p>
+            <h2 class="mt-2 text-3xl font-semibold text-slate-900">Specific rate distribution</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              Rows from the joined table whose description contains milk or tobacco, plotted with specific rate on
+              the x-axis and agreement on the y-axis.
+            </p>
+          </div>
+          <div class="flex items-end gap-3">
+            <button
+              id="download-milk-chart-svg"
+              type="button"
+              class="h-12 rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Download SVG
+            </button>
+            <div class="rounded-2xl bg-rose-50 px-4 py-3 text-right">
+              <p class="text-xs uppercase tracking-[0.28em] text-rose-700">Rows</p>
+              <p id="milk-row-count" class="mt-1 text-2xl font-semibold text-slate-900">Loading</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="milk-chart-status" class="mb-4 text-sm text-slate-600">Loading milk distribution chart...</div>
+        <div
+          id="milk-chart"
+          class="min-h-[720px] rounded-[24px] border border-slate-200/80 bg-[#a8cfc0] p-4 shadow-[0_14px_50px_rgba(15,23,42,0.08)] backdrop-blur"
+        ></div>
+      </section>
+    </main>
+
+    <script>
+      const agriculturalCsvPath = "./tariff_agricultural.csv";
+      const codesCsvPath = "./tariff_codes.csv";
+      const numericFields = new Set(["ad_val_rate", "specific_rate", "rate_type_code"]);
+      const dateFields = new Set([
+        "begin_effective_date",
+        "end_effective_date",
+        "earliest_effective_date",
+      ]);
+      const joinedEndDateCutoff = "2026-01-01";
+
+      const rowCountEl = document.getElementById("row-count");
+      const columnCountEl = document.getElementById("column-count");
+      const codesRowCountEl = document.getElementById("codes-row-count");
+      const joinedRowCountEl = document.getElementById("joined-row-count");
+      const milkRowCountEl = document.getElementById("milk-row-count");
+      const downloadMilkChartSvgEl = document.getElementById("download-milk-chart-svg");
+      let milkChartInstance;
+
+      function buildColumns(fields) {
+        return fields.map((field) => {
+          const definition = {
+            title: field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase()),
+            field,
+            headerFilter: true,
+            sorter: "string",
+            minWidth: 140,
+          };
+
+          if (numericFields.has(field)) {
+            definition.hozAlign = "right";
+            definition.sorter = "number";
+            definition.formatter = (cell) => {
+              const value = Number(cell.getValue());
+              return Number.isFinite(value) ? value.toLocaleString() : cell.getValue();
+            };
+          }
+
+          if (dateFields.has(field)) {
+            definition.sorter = "date";
+            definition.minWidth = 160;
+          }
+
+          if (field === "agreement") {
+            definition.minWidth = 180;
+          }
+
+          if (field === "hts8") {
+            definition.minWidth = 150;
+          }
+
+          if (field === "description") {
+            definition.minWidth = 420;
+          }
+
+          return definition;
+        });
+      }
+
+      function makeSearchFilter(searchValue) {
+        return (data) =>
+          Object.values(data).some((value) => String(value).toLowerCase().includes(searchValue));
+      }
+
+      function wireGlobalSearch(table, searchEl, resetEl, extraFilterFactory) {
+        function applyFilters() {
+          const searchValue = searchEl.value.trim().toLowerCase();
+          const filters = [];
+
+          if (extraFilterFactory) {
+            const extraFilter = extraFilterFactory();
+            if (extraFilter) {
+              filters.push(extraFilter);
+            }
+          }
+
+          if (searchValue) {
+            filters.push(makeSearchFilter(searchValue));
+          }
+
+          table.setFilter(filters);
+        }
+
+        searchEl.addEventListener("input", applyFilters);
+        resetEl.addEventListener("click", () => {
+          searchEl.value = "";
+          table.clearFilter(true);
+          if (extraFilterFactory) {
+            applyFilters();
+          }
+        });
+
+        return applyFilters;
+      }
+
+      async function fetchCsvRows(csvPath) {
+        const response = await fetch(csvPath);
+        if (!response.ok) {
+          throw new Error(`Unable to load CSV file: ${csvPath}`);
+        }
+
+        const csvText = await response.text();
+        const parsed = Papa.parse(csvText, {
+          header: true,
+          dynamicTyping: true,
+          skipEmptyLines: true,
+        });
+
+        if (parsed.errors.length) {
+          throw new Error(parsed.errors[0].message);
+        }
+
+        return parsed;
+      }
+
+      function normalizeHts8(value) {
+        return String(value ?? "").trim();
+      }
+
+      function buildJoinedRows(agriculturalRows, codeRows) {
+        const descriptionByHts8 = new Map(
+          codeRows.map((row) => [normalizeHts8(row.hts8), row.description ?? ""])
+        );
+
+        return agriculturalRows
+          .filter(
+            (row) =>
+              Number(row.specific_rate) !== 0 &&
+              String(row.end_effective_date ?? "") >= joinedEndDateCutoff
+          )
+          .map((row) => ({
+            ...row,
+            description: descriptionByHts8.get(normalizeHts8(row.hts8)) ?? "",
+          }));
+      }
+
+      function buildMilkChart(joinedRows) {
+        const milkRows = joinedRows.filter((row) =>
+          String(row.description ?? "").toLowerCase().includes("milk")
+        );
+        const tobaccoRows = joinedRows.filter((row) =>
+          String(row.description ?? "").toLowerCase().includes("tobacco")
+        );
+        const sentinelSpecificRate = 9999.99;
+
+        function getRawPoints(rows, sentinelDisplayRate) {
+          return rows
+            .map((row) => {
+              const rate = Number(row.specific_rate);
+              const agreement = String(row.agreement ?? "");
+
+              if (!Number.isFinite(rate)) {
+                return null;
+              }
+
+              return {
+                x: rate === sentinelSpecificRate ? sentinelDisplayRate : rate,
+                name: normalizeHts8(row.hts8),
+                agreement,
+                description: String(row.description ?? ""),
+                endEffectiveDate: String(row.end_effective_date ?? ""),
+                originalSpecificRate: rate,
+              };
+            })
+            .filter(Boolean);
+        }
+
+        const rawMilkPoints = getRawPoints(milkRows, 9000);
+        const rawTobaccoPoints = getRawPoints(tobaccoRows, 11000);
+        const agreements = [
+          ...new Set(
+            [...rawMilkPoints, ...rawTobaccoPoints].map((point) => point.agreement).filter(Boolean)
+          ),
+        ].sort();
+        const agreementIndex = new Map(agreements.map((agreement, index) => [agreement, index]));
+        const milkPoints = rawMilkPoints.map((point) => ({
+          ...point,
+          y: agreementIndex.get(point.agreement),
+        }));
+        const tobaccoPoints = rawTobaccoPoints.map((point) => ({
+          ...point,
+          y: agreementIndex.get(point.agreement),
+        }));
+
+        milkRowCountEl.textContent = `${milkPoints.length.toLocaleString()} / ${tobaccoPoints.length.toLocaleString()}`;
+        document.getElementById("milk-chart-status").textContent =
+          "Loaded milk and tobacco distribution chart.";
+
+        milkChartInstance = Highcharts.chart("milk-chart", {
+          chart: {
+            type: "scatter",
+            zooming: { type: "x" },
+            backgroundColor: "#a8cfc0",
+            plotBackgroundColor: "#a8cfc0",
+            spacingTop: 24,
+            spacingRight: 24,
+            spacingBottom: 24,
+            spacingLeft: 24,
+            style: {
+              fontSize: "20px",}
+          },
+          title: {
+            text: "The US tariff on <span class='font-bold' style='color: #ffffff;'>Milk</span> and <span class='font-bold' style='color: #8b5a2b;'>Tobacco</span> items as per different agreements valid on or after 2026.",
+            style: {
+              color: "#16352f",
+              fontSize: "24px",
+              fontWeight: "700",
+            },
+          },
+          credits: { enabled: false },
+          legend: { enabled: false },
+          xAxis: {
+            type: "logarithmic",
+            title: { text: "Specific Rate (0.05 = $0.05 per unit of quantity)",
+                     style: { fontSize: "20px"}},
+            min: 0.001,
+            gridLineColor: "rgba(148, 163, 184, 0.2)",
+            gridLineWidth: 1,
+          },
+          yAxis: {
+            title: { text: "" },
+            categories: agreements,
+            tickWidth: 0,
+            gridLineColor: "rgba(148, 163, 184, 0.2)",
+            gridLineWidth: 1,
+          },
+          tooltip: {
+            useHTML: true,
+            pointFormat:
+              "<b>{point.name}</b><br/>Agreement: {point.agreement}<br/>Specific rate: {point.originalSpecificRate}<br/>End effective date: {point.endEffectiveDate}<br/>{point.description}",
+          },
+          plotOptions: {
+            scatter: {
+              jitter: {
+                y: 0.2,
+              },
+              marker: {
+                radius: 4,
+                symbol: "circle",
+                lineWidth: 0,
+              },
+              states: {
+                hover: {
+                  enabled: true,
+                  lineColor: "#be123c",
+                },
+              },
+            },
+            series: {
+              turboThreshold: 0,
+            },
+          },
+          series: [
+            {
+              name: "Milk rows",
+              data: milkPoints,
+              color: "#ffffff",
+            },
+            {
+              name: "Tobacco rows",
+              data: tobaccoPoints,
+              color: "#8b5a2b",
+            },
+          ],
+        });
+      }
+
+      function downloadChartSvg(chart, filename) {
+        const svg = chart?.container?.querySelector("svg");
+        if (!svg) {
+          return;
+        }
+
+        const serializer = new XMLSerializer();
+        const source = serializer.serializeToString(svg);
+        const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      async function loadAgriculturalTable() {
+        try {
+          const parsed = await fetchCsvRows(agriculturalCsvPath);
+          const rows = parsed.data;
+          const fields = parsed.meta.fields || [];
+          columnCountEl.textContent = String(fields.length);
+          rowCountEl.textContent = rows.length.toLocaleString();
+          document.getElementById("agri-status").textContent = "Loaded agricultural CSV data.";
+
+          const agreementFilterEl = document.getElementById("agri-agreement-filter");
+          const agreements = [...new Set(rows.map((row) => row.agreement).filter(Boolean))].sort();
+          agreements.forEach((agreement) => {
+            const option = document.createElement("option");
+            option.value = agreement;
+            option.textContent = agreement;
+            agreementFilterEl.appendChild(option);
+          });
+
+          const table = new Tabulator("#tariff-table", {
+            data: rows,
+            columns: buildColumns(fields),
+            layout: "fitDataStretch",
+            pagination: true,
+            paginationSize: 10,
+            paginationSizeSelector: [10, 20, 50, 100],
+            movableColumns: true,
+            placeholder: "No matching rows.",
+          });
+
+          const searchEl = document.getElementById("agri-search");
+          const resetEl = document.getElementById("agri-reset-filters");
+          const applyFilters = wireGlobalSearch(table, searchEl, resetEl, () => {
+            const agreementValue = agreementFilterEl.value;
+            return agreementValue ? { field: "agreement", type: "=", value: agreementValue } : null;
+          });
+
+          agreementFilterEl.addEventListener("change", applyFilters);
+          resetEl.addEventListener("click", () => {
+            agreementFilterEl.value = "";
+            applyFilters();
+          });
+        } catch (error) {
+          document.getElementById("agri-status").textContent =
+            "The agricultural CSV could not be loaded. Use a local web server instead of opening the file directly.";
+          rowCountEl.textContent = "Error";
+          console.error(error);
+        }
+      }
+
+      async function loadCodesTable() {
+        try {
+          const parsed = await fetchCsvRows(codesCsvPath);
+          const rows = parsed.data;
+          const fields = parsed.meta.fields || [];
+          codesRowCountEl.textContent = rows.length.toLocaleString();
+          document.getElementById("codes-status").textContent = "Loaded tariff code CSV data.";
+
+          const table = new Tabulator("#codes-table", {
+            data: rows,
+            columns: buildColumns(fields),
+            layout: "fitDataStretch",
+            pagination: true,
+            paginationSize: 10,
+            paginationSizeSelector: [10, 20, 50, 100],
+            movableColumns: true,
+            placeholder: "No matching rows.",
+          });
+
+          const searchEl = document.getElementById("codes-search");
+          const resetEl = document.getElementById("codes-reset-filters");
+          wireGlobalSearch(table, searchEl, resetEl);
+        } catch (error) {
+          document.getElementById("codes-status").textContent =
+            "The tariff code CSV could not be loaded. Use a local web server instead of opening the file directly.";
+          codesRowCountEl.textContent = "Error";
+          console.error(error);
+        }
+      }
+
+      async function loadJoinedTable() {
+        try {
+          const [agriculturalParsed, codesParsed] = await Promise.all([
+            fetchCsvRows(agriculturalCsvPath),
+            fetchCsvRows(codesCsvPath),
+          ]);
+
+          const agriculturalRows = agriculturalParsed.data;
+          const agriculturalFields = agriculturalParsed.meta.fields || [];
+          const codeRows = codesParsed.data;
+          const joinedRows = buildJoinedRows(agriculturalRows, codeRows);
+          const joinedFields = [...agriculturalFields, "description"];
+
+          joinedRowCountEl.textContent = joinedRows.length.toLocaleString();
+          document.getElementById("joined-status").textContent = "Loaded joined CSV data.";
+
+          const table = new Tabulator("#joined-table", {
+            data: joinedRows,
+            columns: buildColumns(joinedFields),
+            layout: "fitDataStretch",
+            pagination: true,
+            paginationSize: 10,
+            paginationSizeSelector: [10, 20, 50, 100],
+            movableColumns: true,
+            placeholder: "No matching rows.",
+          });
+
+          const searchEl = document.getElementById("joined-search");
+          const resetEl = document.getElementById("joined-reset-filters");
+          wireGlobalSearch(table, searchEl, resetEl);
+          buildMilkChart(joinedRows);
+        } catch (error) {
+          document.getElementById("joined-status").textContent =
+            "The joined table could not be loaded. Use a local web server instead of opening the file directly.";
+          joinedRowCountEl.textContent = "Error";
+          document.getElementById("milk-chart-status").textContent =
+            "The milk distribution chart could not be loaded.";
+          milkRowCountEl.textContent = "Error";
+          console.error(error);
+        }
+      }
+
+      loadAgriculturalTable();
+      loadCodesTable();
+      loadJoinedTable();
+      downloadMilkChartSvgEl.addEventListener("click", () => {
+        downloadChartSvg(milkChartInstance, "milk-tobacco-specific-rate.svg");
+      });
+    </script>
+  </body>
+
+{% enddemo %}
