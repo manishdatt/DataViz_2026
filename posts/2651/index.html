@@ -1,0 +1,766 @@
+---
+title: Italian industrial production
+author: Manish Datt
+date: '2026-05-05'
+description: Italian beer production data across different decades.
+image: Italy_beer.png
+categories:
+- Highcharts
+- D3.js
+- TidyTuesday
+slug: 2651
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Food and Beverages Table</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
+      body {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      .tabulator {
+        border: 1px solid rgb(226 232 240);
+        border-radius: 8px;
+        box-shadow: 0 20px 45px rgb(15 23 42 / 0.08);
+        overflow: hidden;
+      }
+
+      .tabulator .tabulator-header {
+        background: rgb(248 250 252);
+        border-bottom: 1px solid rgb(226 232 240);
+        color: rgb(51 65 85);
+        font-weight: 700;
+      }
+
+      .tabulator .tabulator-header .tabulator-col {
+        background: rgb(248 250 252);
+        border-right: 1px solid rgb(226 232 240);
+      }
+
+      .tabulator .tabulator-row {
+        border-bottom: 1px solid rgb(241 245 249);
+      }
+
+      .tabulator .tabulator-row.tabulator-row-even {
+        background: rgb(248 250 252);
+      }
+
+      .tabulator .tabulator-row:hover {
+        background: rgb(236 253 245);
+      }
+
+      .tabulator .tabulator-footer {
+        background: white;
+        border-top: 1px solid rgb(226 232 240);
+      }
+
+      .tabulator .tabulator-footer .tabulator-page {
+        border: 1px solid rgb(203 213 225);
+        border-radius: 6px;
+        color: rgb(15 23 42);
+        font-weight: 600;
+      }
+
+      .tabulator .tabulator-footer .tabulator-page.active {
+        background: rgb(20 184 166);
+        border-color: rgb(20 184 166);
+        color: white;
+      }
+
+      .highcharts-background {
+        fill: transparent;
+      }
+
+      .beer-art-svg text {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-100 text-slate-900">
+    <main class="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+      <header class="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-wide text-teal-700">Food and beverages</p>
+          <h1 class="mt-1 text-3xl font-bold tracking-normal text-slate-950">Historical Production Data</h1>
+        </div>
+        <div class="flex w-full flex-col gap-2 sm:w-auto sm:min-w-80">
+          <label for="table-search" class="text-sm font-semibold text-slate-600">Search table</label>
+          <input
+            id="table-search"
+            type="search"
+            placeholder="Filter any column..."
+            class="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+          />
+        </div>
+      </header>
+
+      <section class="grid gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-sm font-semibold text-slate-500">Rows</p>
+          <p id="row-count" class="mt-1 text-2xl font-bold text-slate-950">0</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-sm font-semibold text-slate-500">Year Range</p>
+          <p id="year-range" class="mt-1 text-2xl font-bold text-slate-950">Loading</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-sm font-semibold text-slate-500">Fields</p>
+          <p id="field-count" class="mt-1 text-2xl font-bold text-slate-950">0</p>
+        </div>
+      </section>
+
+      <section class="min-h-0 flex-1">
+        <div id="food-table" class="bg-white"></div>
+        <p id="table-status" class="mt-3 text-sm font-medium text-slate-600">Loading food_beverages.csv...</p>
+      </section>
+      
+      <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-col gap-1 pb-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-sm font-semibold text-slate-500">Decade averages</p>
+            <h2 class="text-xl font-bold text-slate-950">Beer Quantity by Decade</h2>
+          </div>
+          <p id="chart-status" class="text-sm font-medium text-slate-600">Loading chart...</p>
+        </div>
+        <div id="beer-chart" class="h-96 w-full"></div>
+      </section>
+
+      <section class="rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-col gap-1 pb-3 sm:flex-row sm:items-end sm:justify-between">
+          <div class="flex flex-wrap items-center gap-2">
+            <p id="beer-art-status" class="mr-1 text-sm font-medium text-slate-600">Loading glasses...</p>
+            <button
+              id="download-beer-svg"
+              type="button"
+              class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled
+            >
+              SVG
+            </button>
+            <button
+              id="download-beer-png"
+              type="button"
+              class="rounded-md bg-amber-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled
+            >
+              PNG
+            </button>
+          </div>
+        </div>
+        <div id="beer-art-chart" class="relative w-full overflow-x-auto"></div>
+      </section>
+
+    </main>
+
+    <script>
+      const numericColumns = new Set([
+        "Year",
+        "Sugar",
+        "Glucose",
+        "Coffee_substitute",
+        "Seed_oil",
+        "Ethyl_alcohol_1",
+        "Ethyl_alcohol_2",
+        "Beer",
+      ]);
+
+      const formatHeader = (field) => field.replaceAll("_", " ");
+
+      const toNumberOrNull = (value) => {
+        if (value === "NA" || value === "" || value == null) {
+          return null;
+        }
+
+        const number = Number(value);
+        return Number.isFinite(number) ? number : value;
+      };
+
+      const buildColumns = (fields) =>
+        fields.map((field) => ({
+          title: formatHeader(field),
+          field,
+          sorter: numericColumns.has(field) ? "number" : "string",
+          hozAlign: numericColumns.has(field) ? "right" : "left",
+          headerFilter: "input",
+          formatter: (cell) => {
+            const value = cell.getValue();
+            return value == null ? "<span class='text-slate-400'>NA</span>" : value.toLocaleString();
+          },
+        }));
+
+      const setSummary = (rows, fields) => {
+        const years = rows.map((row) => row.Year).filter(Number.isFinite);
+
+        document.querySelector("#row-count").textContent = rows.length.toLocaleString();
+        document.querySelector("#field-count").textContent = fields.length.toLocaleString();
+        document.querySelector("#year-range").textContent =
+          years.length > 0 ? `${Math.min(...years)}-${Math.max(...years)}` : "NA";
+      };
+
+      const mean = (values) => values.reduce((total, value) => total + value, 0) / values.length;
+
+      const formatCompactQuantity = (value) => {
+        if (!Number.isFinite(value)) {
+          return "NA";
+        }
+
+        if (Math.abs(value) >= 1000000) {
+          return `${Highcharts.numberFormat(value / 1000000, value >= 10000000 ? 0 : 1)}M`;
+        }
+
+        if (Math.abs(value) >= 1000) {
+          return `${Highcharts.numberFormat(value / 1000, value >= 10000 ? 0 : 1)}K`;
+        }
+
+        return Highcharts.numberFormat(value, 0);
+      };
+
+      const standardDeviation = (values, average) => {
+        if (values.length < 2) {
+          return 0;
+        }
+
+        const variance =
+          values.reduce((total, value) => total + (value - average) ** 2, 0) / (values.length - 1);
+        return Math.sqrt(variance);
+      };
+
+      const buildDecadeStats = (rows) => {
+        const decadeMap = new Map();
+
+        rows.forEach((row) => {
+          if (!Number.isFinite(row.Year) || !Number.isFinite(row.Beer)) {
+            return;
+          }
+
+          const decadeStart = 1876 + Math.floor((row.Year - 1876) / 10) * 10;
+          const decadeEnd = decadeStart + 9;
+          const label = `${decadeStart}-${decadeEnd}`;
+
+          if (!decadeMap.has(label)) {
+            decadeMap.set(label, []);
+          }
+
+          decadeMap.get(label).push(row.Beer);
+        });
+
+        return Array.from(decadeMap, ([label, values]) => {
+          const average = mean(values);
+          const deviation = standardDeviation(values, average);
+
+          return {
+            label,
+            average,
+            deviation,
+            low: Math.max(0, average - deviation),
+            high: average + deviation,
+            count: values.length,
+          };
+        });
+      };
+
+      const downloadBlob = (blob, fileName) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      };
+
+      const getBeerArtSvgSource = () => {
+        const svg = document.querySelector("#beer-art-chart svg");
+
+        if (!svg) {
+          return null;
+        }
+
+        const clone = svg.cloneNode(true);
+        clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+        return new XMLSerializer().serializeToString(clone);
+      };
+
+      const downloadBeerArtSvg = () => {
+        const svgSource = getBeerArtSvgSource();
+
+        if (!svgSource) {
+          return;
+        }
+
+        downloadBlob(new Blob([svgSource], { type: "image/svg+xml;charset=utf-8" }), "beer-glasses-by-decade.svg");
+      };
+
+      const downloadBeerArtPng = () => {
+        const svg = document.querySelector("#beer-art-chart svg");
+        const svgSource = getBeerArtSvgSource();
+
+        if (!svg || !svgSource) {
+          return;
+        }
+
+        const viewBox = svg.viewBox.baseVal;
+        const width = viewBox.width || svg.getBoundingClientRect().width;
+        const height = viewBox.height || svg.getBoundingClientRect().height;
+        const scale = 2;
+        const image = new Image();
+        const svgUrl = URL.createObjectURL(new Blob([svgSource], { type: "image/svg+xml;charset=utf-8" }));
+
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+
+          const context = canvas.getContext("2d");
+          context.fillStyle = "#fffbeb";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+          URL.revokeObjectURL(svgUrl);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              downloadBlob(blob, "beer-glasses-by-decade.png");
+            }
+          }, "image/png");
+        };
+
+        image.onerror = () => {
+          URL.revokeObjectURL(svgUrl);
+        };
+
+        image.src = svgUrl;
+      };
+
+      const renderArtisticBeerChart = (decadeStats) => {
+        const container = document.querySelector("#beer-art-chart");
+        container.innerHTML = "";
+
+        if (decadeStats.length === 0) {
+          document.querySelector("#beer-art-status").textContent = "No Beer data available";
+          return;
+        }
+
+        const glassWidth = 92;
+        const glassHeight = 210;
+        const gap = 30;
+        const margin = { top: 64, right: 24, bottom: 78, left: 24 };
+        const width = margin.left + margin.right + decadeStats.length * glassWidth + (decadeStats.length - 1) * gap;
+        const height = margin.top + margin.bottom + glassHeight;
+        const maxAverage = d3.max(decadeStats, (decade) => decade.average);
+        const maxDeviation = d3.max(decadeStats, (decade) => decade.deviation) || 1;
+        const fillScale = d3.scaleLinear().domain([0, maxAverage]).range([0.08, 0.92]);
+        const frothScale = d3.scaleLinear().domain([0, maxDeviation]).range([7, 24]);
+        const bubbleScale = d3.scaleLinear().domain([0, maxDeviation]).range([2, 8]);
+
+        const svg = d3
+          .select(container)
+          .append("svg")
+          .attr("class", "beer-art-svg")
+          .attr("viewBox", `0 0 ${width} ${height}`)
+          .attr("width", Math.max(width, container.clientWidth))
+          .attr("height", height)
+          .attr("role", "img")
+          .attr("aria-label", "Beer glasses showing average Beer quantity by decade with froth proportional to standard deviation");
+
+        const defs = svg.append("defs");
+
+        const frothShadow = defs
+          .append("filter")
+          .attr("id", "froth-shadow")
+          .attr("x", "-20%")
+          .attr("y", "-30%")
+          .attr("width", "140%")
+          .attr("height", "170%");
+        frothShadow
+          .append("feDropShadow")
+          .attr("dx", 0)
+          .attr("dy", 2)
+          .attr("stdDeviation", 1.4)
+          .attr("flood-color", "#92400e")
+          .attr("flood-opacity", 0.24);
+
+        const glassGradient = defs
+          .append("linearGradient")
+          .attr("id", "glass-sheen")
+          .attr("x1", "0%")
+          .attr("x2", "100%");
+        glassGradient.append("stop").attr("offset", "0%").attr("stop-color", "#ffffff").attr("stop-opacity", 0.72);
+        glassGradient.append("stop").attr("offset", "48%").attr("stop-color", "#dbeafe").attr("stop-opacity", 0.22);
+        glassGradient.append("stop").attr("offset", "100%").attr("stop-color", "#ffffff").attr("stop-opacity", 0.52);
+
+        svg
+          .append("rect")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("width", width)
+          .attr("height", height)
+          .attr("rx", 14)
+          .attr("fill", "#fffbeb");
+
+        svg
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 28)
+          .attr("text-anchor", "middle")
+          .attr("font-size", 24)
+          .attr("font-weight", 800)
+          .attr("fill", "#0f172a")
+          .text("Timeline of Beer production (hectoliters) in Italy");
+
+        svg
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 50)
+          .attr("text-anchor", "middle")
+          .attr("font-size", 14)
+          .attr("font-weight", 600)
+          .attr("fill", "#92400e")
+          .text("Beer level shows average quantity for each decade and froth shows standard deviation");
+
+        const tooltip = d3
+          .select(container)
+          .append("div")
+          .attr(
+            "class",
+            "pointer-events-none absolute hidden rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-lg",
+          );
+
+        const glasses = svg
+          .selectAll("g.decade-glass")
+          .data(decadeStats)
+          .join("g")
+          .attr("class", "decade-glass")
+          .attr("transform", (_decade, index) => `translate(${margin.left + index * (glassWidth + gap)}, ${margin.top})`);
+
+        glasses.each(function (decade, index) {
+          const group = d3.select(this);
+          const glassTop = 8;
+          const glassBottom = glassHeight - 26;
+          const innerX = 13;
+          const innerWidth = glassWidth - 26;
+          const innerHeight = glassBottom - glassTop;
+          const beerHeight = innerHeight * fillScale(decade.average);
+          const beerY = glassBottom - beerHeight;
+          const frothHeight = Math.min(frothScale(decade.deviation), beerY - glassTop + 16);
+          const frothY = beerY - frothHeight * 0.56;
+          const bubbles = Math.round(bubbleScale(decade.deviation));
+
+          const weizenGlassPath = `
+            M6 ${glassTop + 2}
+            Q${glassWidth / 2} -2 ${glassWidth - 6} ${glassTop + 2}
+            C84 38, 68 72, 66 108
+            C64 134, 76 154, 69 173
+            C61 187, 55 ${glassBottom}, ${glassWidth / 2} ${glassBottom}
+            C37 ${glassBottom}, 31 187, 23 173
+            C16 154, 28 134, 26 108
+            C24 72, 8 38, 6 ${glassTop + 2}
+            Z
+          `;
+          const clipId = `weizen-clip-${index}`;
+
+          defs
+            .append("clipPath")
+            .attr("id", clipId)
+            .append("path")
+            .attr("d", weizenGlassPath);
+
+          group
+            .append("path")
+            .attr("d", weizenGlassPath)
+            .attr("fill", "#eff6ff")
+            .attr("stroke", "#94a3b8")
+            .attr("stroke-width", 2)
+            .attr("opacity", 0.78);
+
+          group
+            .append("rect")
+            .attr("x", innerX)
+            .attr("y", beerY)
+            .attr("width", innerWidth)
+            .attr("height", beerHeight)
+            .attr("rx", 9)
+            .attr("fill", "#d97706")
+            .attr("clip-path", `url(#${clipId})`)
+            .attr("opacity", 0.94);
+
+          group
+            .append("path")
+            .attr(
+              "d",
+              `M${innerX} ${frothY + frothHeight}
+               C${innerX + 8} ${frothY + frothHeight - 5}, ${innerX + 15} ${frothY + frothHeight + 3}, ${innerX + 23} ${frothY + frothHeight - 2}
+               C${innerX + 34} ${frothY + frothHeight - 9}, ${innerX + 42} ${frothY + frothHeight + 2}, ${innerX + 52} ${frothY + frothHeight - 3}
+               C${innerX + 59} ${frothY + frothHeight - 7}, ${innerX + innerWidth - 6} ${frothY + frothHeight - 2}, ${innerX + innerWidth} ${frothY + frothHeight - 5}
+               L${innerX + innerWidth} ${frothY + 8}
+               C${innerX + 58} ${frothY - 3}, ${innerX + 51} ${frothY + 9}, ${innerX + 44} ${frothY + 3}
+               C${innerX + 35} ${frothY - 6}, ${innerX + 28} ${frothY + 8}, ${innerX + 20} ${frothY + 2}
+               C${innerX + 12} ${frothY - 4}, ${innerX + 6} ${frothY + 6}, ${innerX} ${frothY + 3}
+               Z`,
+            )
+            .attr("fill", "#fde68a")
+            .attr("stroke", "#d97706")
+            .attr("stroke-width", 1.4)
+            .attr("clip-path", `url(#${clipId})`)
+            .attr("filter", "url(#froth-shadow)")
+            .attr("opacity", 1);
+
+          group
+            .append("path")
+            .attr("d", weizenGlassPath)
+            .attr("fill", "url(#glass-sheen)")
+            .attr("stroke", "#cbd5e1")
+            .attr("stroke-width", 1.2);
+
+          group
+            .append("path")
+            .attr(
+              "d",
+              `M12 ${glassTop + 8} Q${glassWidth / 2} ${glassTop + 17} ${glassWidth - 12} ${glassTop + 8}`,
+            )
+            .attr("fill", "none")
+            .attr("stroke", "#bae6fd")
+            .attr("stroke-width", 3)
+            .attr("stroke-linecap", "round")
+            .attr("opacity", 0.72);
+
+          group
+            .append("path")
+            .attr(
+              "d",
+              `M10 ${glassTop + 3} Q${glassWidth / 2} -1 ${glassWidth - 10} ${glassTop + 3}`,
+            )
+            .attr("fill", "none")
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 1.6)
+            .attr("stroke-linecap", "round")
+            .attr("opacity", 0.85);
+
+          if (beerHeight > 24) {
+            d3.range(bubbles).forEach((bubbleIndex) => {
+              const bubbleX = innerX + 9 + ((bubbleIndex * 17 + index * 11) % (innerWidth - 18));
+              const bubbleTop = beerY + 12;
+              const bubbleRange = Math.max(1, glassBottom - bubbleTop - 10);
+              const bubbleY = bubbleTop + ((bubbleIndex * 29 + index * 7) % bubbleRange);
+              const radius = 2 + ((bubbleIndex + index) % 3);
+
+              group
+                .append("circle")
+                .attr("cx", bubbleX)
+                .attr("cy", bubbleY)
+                .attr("r", radius)
+                .attr("fill", "#fff7ed")
+                .attr("clip-path", `url(#${clipId})`)
+                .attr("opacity", 0.62);
+            });
+          }
+
+          group
+            .append("text")
+            .attr("x", glassWidth / 2)
+            .attr("y", glassHeight + 22)
+            .attr("text-anchor", "middle")
+            .attr("font-size", 14)
+            .attr("font-weight", 700)
+            .attr("fill", "#334155")
+            .text(decade.label);
+
+          group
+            .append("text")
+            .attr("x", glassWidth / 2)
+            .attr("y", glassHeight + 39)
+            .attr("text-anchor", "middle")
+            .attr("font-size", 13)
+            .attr("font-weight", 700)
+            .attr("fill", "#64748b")
+            .text(formatCompactQuantity(decade.average));
+        });
+
+        glasses
+          .on("mouseenter", function (event, decade) {
+            d3.select(this).attr("opacity", 0.82);
+            tooltip
+              .classed("hidden", false)
+              .html(
+                `<strong>${decade.label}</strong><br>Average Beer: ${Highcharts.numberFormat(decade.average, 0)}<br>Std dev: ${Highcharts.numberFormat(decade.deviation, 0)}<br>Years: ${decade.count}`,
+              );
+          })
+          .on("mousemove", (event) => {
+            const bounds = container.getBoundingClientRect();
+            tooltip
+              .style("left", `${event.clientX - bounds.left + 14}px`)
+              .style("top", `${event.clientY - bounds.top + 14}px`);
+          })
+          .on("mouseleave", function () {
+            d3.select(this).attr("opacity", 1);
+            tooltip.classed("hidden", true);
+          });
+
+        document.querySelector("#beer-art-status").textContent =
+          "Beer level = average, froth = standard deviation";
+        document.querySelector("#download-beer-svg").disabled = false;
+        document.querySelector("#download-beer-png").disabled = false;
+      };
+
+      const renderBeerChart = (rows) => {
+        const decadeStats = buildDecadeStats(rows);
+        renderArtisticBeerChart(decadeStats);
+
+        Highcharts.chart("beer-chart", {
+          chart: {
+            type: "column",
+            spacing: [16, 16, 12, 12],
+          },
+          title: {
+            text: null,
+          },
+          credits: {
+            enabled: false,
+          },
+          xAxis: {
+            categories: decadeStats.map((decade) => decade.label),
+            title: {
+              text: "Timeline",
+            },
+            labels: {
+              style: {
+                color: "#475569",
+                fontSize: "12px",
+              },
+            },
+          },
+          yAxis: {
+            min: 0,
+            title: {
+              text: "Average Beer quantity",
+            },
+            labels: {
+              formatter() {
+                return Highcharts.numberFormat(this.value, 0);
+              },
+              style: {
+                color: "#475569",
+              },
+            },
+          },
+          tooltip: {
+            shared: true,
+            valueDecimals: 0,
+            formatter() {
+              const decade = decadeStats[this.points[0].point.index];
+              return `
+                <strong>${decade.label}</strong><br>
+                Average Beer: ${Highcharts.numberFormat(decade.average, 0)}<br>
+                Std dev range: ${Highcharts.numberFormat(decade.low, 0)} - ${Highcharts.numberFormat(decade.high, 0)}<br>
+                Years with Beer data: ${decade.count}
+              `;
+            },
+          },
+          legend: {
+            enabled: true,
+          },
+          plotOptions: {
+            column: {
+              color: "#14b8a6",
+              borderRadius: 4,
+              pointPadding: 0.12,
+            },
+            errorbar: {
+              color: "#0f172a",
+              stemWidth: 2,
+              whiskerLength: "45%",
+              whiskerWidth: 2,
+            },
+          },
+          series: [
+            {
+              name: "Average Beer",
+              data: decadeStats.map((decade) => Math.round(decade.average)),
+            },
+            {
+              name: "Std dev",
+              type: "errorbar",
+              data: decadeStats.map((decade) => [decade.low, decade.high]),
+              tooltip: {
+                pointFormat: "",
+              },
+            },
+          ],
+        });
+
+        document.querySelector("#chart-status").textContent =
+          `${decadeStats.length} decade groups with Beer data`;
+      };
+
+      document.querySelector("#download-beer-svg").addEventListener("click", downloadBeerArtSvg);
+      document.querySelector("#download-beer-png").addEventListener("click", downloadBeerArtPng);
+
+      Papa.parse("food_beverages.csv", {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        transform: toNumberOrNull,
+        complete: ({ data, meta }) => {
+          const fields = meta.fields ?? Object.keys(data[0] ?? {});
+          setSummary(data, fields);
+          renderBeerChart(data);
+
+          const table = new Tabulator("#food-table", {
+            data,
+            columns: buildColumns(fields),
+            height: "51vh",
+            layout: "fitDataStretch",
+            movableColumns: true,
+            pagination: true,
+            paginationSize: 10,
+            paginationSizeSelector: [10, 15, 25, 50, true],
+            placeholder: "No matching food and beverage records",
+          });
+
+          document.querySelector("#table-search").addEventListener("input", (event) => {
+            const query = event.target.value.trim().toLowerCase();
+
+            if (!query) {
+              table.clearFilter();
+              return;
+            }
+
+            table.setFilter((row) =>
+              fields.some((field) => String(row[field] ?? "NA").toLowerCase().includes(query)),
+            );
+          });
+
+          document.querySelector("#table-status").textContent =
+            "Use column filters, sorting, pagination, and the search box to explore the CSV.";
+        },
+        error: (error) => {
+          document.querySelector("#table-status").textContent =
+            `Could not load food_beverages.csv: ${error.message}`;
+        },
+      });
+    </script>
+  </body>
+
+{% enddemo %}

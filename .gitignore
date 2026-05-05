@@ -90,3 +90,5 @@ quarto_output/
 # Cache
 .cache/
 .tmp/
+/.quarto/
+**/*.quarto_ipynb
