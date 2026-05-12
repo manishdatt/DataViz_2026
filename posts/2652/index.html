@@ -1,0 +1,664 @@
+---
+title: Twinned Cities
+author: Manish Datt
+date: '2026-05-12'
+description: Top 10 cities with the maximum number of links. 
+image: cities_links.png
+categories:
+- D3.js
+- Networks
+- TidyTuesday
+layout: layouts/base-min.njk
+slug: 2652
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+{% demo %}
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cities, Links & Network Graph</title>
+    <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.2/dist/css/tabulator_midnight.min.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 2rem; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); padding: 2rem; margin-bottom: 2rem; }
+        h1 { color: white; text-align: center; margin-bottom: 2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .table-title { color: #333; margin-bottom: 1.5rem; font-size: 1.75rem; font-weight: bold; }
+        #cities-table, #links-table { border-radius: 8px; overflow: hidden; }
+        #network-graph, #all-cities-graph { width: 100%; height: 600px; background: #0f0f0f; border-radius: 8px; }
+        .graph-controls { text-align: center; margin-top: 1rem; }
+        .graph-controls button { background: #667eea; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; margin: 0 0.5rem; }
+        .graph-controls button:hover { background: #764ba2; }
+        .node-label { font-size: 14px; fill: #e0e0e0; pointer-events: none; text-anchor: middle; font-weight: 600; text-shadow: 0 0 3px #000; }
+        .link-label { font-size: 9px; fill: #888; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-4xl font-bold">Cities, Links & Network Graph</h1>
+        
+        <div class="card">
+            <div class="table-title">Cities Data</div>
+            <div id="cities-table"></div>
+        </div>
+        
+        <div class="card">
+            <div class="table-title">Links Data</div>
+            <div id="links-table"></div>
+        </div>
+
+        <div class="card">
+            <div class="table-title">Network Graph (Top 10 Cities)</div>
+            <div id="network-graph"></div>
+            <div class="graph-controls">
+                <button onclick="resetZoom()">Reset Zoom</button>
+                <button onclick="toggleForce()">Toggle Physics</button>
+                <button onclick="downloadSVG()">Download SVG</button>
+                <button onclick="downloadPNG()">Download PNG</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="table-title">Network Graph (All Cities by Degree)</div>
+            <div id="all-cities-graph"></div>
+        </div>
+        </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const [citiesRes, linksRes] = await Promise.all([
+                    fetch('cities.csv'),
+                    fetch('links.csv')
+                ]);
+                const citiesCsv = await citiesRes.text();
+                const linksCsv = await linksRes.text();
+
+                function parseCSV(csvText) {
+                    const lines = csvText.trim().split('\n');
+                    const headers = lines[0].split(',');
+                    const data = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = lines[i].split(',');
+                        const row = {};
+                        headers.forEach((h, idx) => row[h.trim()] = values[idx] ? values[idx].trim() : '');
+                        data.push(row);
+                    }
+                    return data;
+                }
+
+                const citiesData = parseCSV(citiesCsv);
+                let linksData = parseCSV(linksCsv);
+
+                const cityIdToName = {};
+                citiesData.forEach(city => {
+                    cityIdToName[city.id] = city.name;
+                });
+
+                linksData.forEach(link => {
+                    link.source_name = cityIdToName[link.source] || 'Unknown';
+                    link.target_name = cityIdToName[link.target] || 'Unknown';
+                });
+
+                if (typeof Tabulator === 'undefined') {
+                    document.getElementById('cities-table').innerHTML = '<p class="text-red-500 p-4">Tabulator failed to load.</p>';
+                    document.getElementById('links-table').innerHTML = '<p class="text-red-500 p-4">Tabulator failed to load.</p>';
+                    console.error('Tabulator not loaded');
+                    return;
+                }
+
+                new Tabulator('#cities-table', {
+                    data: citiesData,
+                    layout: 'fitColumns',
+                    pagination: 'local',
+                    paginationSize: 10,
+                    persistence: false,
+                    columns: [
+                        { title: 'ID', field: 'id', width: 100 },
+                        { title: 'Name', field: 'name', width: 150 },
+                        { title: 'Longitude', field: 'lng', width: 120 },
+                        { title: 'Latitude', field: 'lat', width: 120 },
+                        { title: 'Country', field: 'country', width: 180 },
+                        { title: 'Country Code', field: 'countrycd', width: 120 },
+                        { title: 'Continent', field: 'continent', width: 130 }
+                    ]
+                });
+
+                new Tabulator('#links-table', {
+                    data: linksData,
+                    layout: 'fitColumns',
+                    pagination: 'local',
+                    paginationSize: 10,
+                    persistence: false,
+                    columns: [
+                        { title: 'Source', field: 'source', width: 120 },
+                        { title: 'Source Name', field: 'source_name', width: 150 },
+                        { title: 'Target', field: 'target', width: 120 },
+                        { title: 'Target Name', field: 'target_name', width: 150 }
+                    ]
+                });
+
+                createNetworkGraph(citiesData, linksData, true);
+
+                createAllCitiesGraph(citiesData, linksData);
+
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('cities-table').innerHTML = '<p class="text-red-500 p-4">Error loading data: ' + error.message + '</p>';
+                document.getElementById('links-table').innerHTML = '<p class="text-red-500 p-4">Error loading data: ' + error.message + '</p>';
+            }
+        });
+
+        function createNetworkGraph(citiesData, linksData, showTop10 = false) {
+            const width = document.getElementById('network-graph').clientWidth;
+            const height = 600;
+
+            const svg = d3.select('#network-graph')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .attr('viewBox', [0, 0, width, height]);
+
+            svg.append('rect')
+                .attr('width', width)
+                .attr('height', height)
+                .attr('fill', '#0f0f0f');
+
+            svg.append('text')
+                .attr('class', 'graph-title')
+                .attr('x', width / 2)
+                .attr('y', 25)
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#e0e0e0')
+                .attr('font-size', '20px')
+                .attr('font-weight', 'bold')
+                .text('Top 10 Cities with maximum number of links. Nodes are colored by continent.');
+
+            const cityMap = new Map();
+            citiesData.forEach(city => {
+                cityMap.set(city.id, city);
+            });
+
+            const allNodesMap = new Map();
+            linksData.forEach(link => {
+                if (!allNodesMap.has(link.source)) {
+                    allNodesMap.set(link.source, { 
+                        id: link.source, 
+                        name: cityMap.get(link.source)?.name || link.source, 
+                        continent: cityMap.get(link.source)?.continent || 'Unknown', 
+                        country: cityMap.get(link.source)?.country || 'Unknown',
+                        degree: 0 
+                    });
+                }
+                if (!allNodesMap.has(link.target)) {
+                    allNodesMap.set(link.target, { 
+                        id: link.target, 
+                        name: cityMap.get(link.target)?.name || link.target, 
+                        continent: cityMap.get(link.target)?.continent || 'Unknown', 
+                        country: cityMap.get(link.target)?.country || 'Unknown',
+                        degree: 0 
+                    });
+                }
+                allNodesMap.get(link.source).degree++;
+                allNodesMap.get(link.target).degree++;
+            });
+
+            const sortedNodes = Array.from(allNodesMap.values()).sort((a, b) => b.degree - a.degree);
+            const top10 = sortedNodes.slice(0, 10);
+            const top10Ids = new Set(top10.map(n => n.id));
+
+            let displayNodes, displayLinks;
+
+            if (showTop10) {
+                const displayNodeIds = new Set(top10Ids);
+                linksData.forEach(link => {
+                    if (top10Ids.has(link.source)) displayNodeIds.add(link.target);
+                    if (top10Ids.has(link.target)) displayNodeIds.add(link.source);
+                });
+
+                displayNodes = Array.from(allNodesMap.values()).filter(n => displayNodeIds.has(n.id));
+                displayLinks = linksData.filter(link => 
+                    displayNodeIds.has(link.source) && displayNodeIds.has(link.target) &&
+                    (top10Ids.has(link.source) || top10Ids.has(link.target))
+                ).map(d => ({
+                    source: d.source,
+                    target: d.target,
+                    source_name: d.source_name,
+                    target_name: d.target_name
+                }));
+
+                const linkedNodeIds = new Set();
+                displayLinks.forEach(link => {
+                    linkedNodeIds.add(link.source);
+                    linkedNodeIds.add(link.target);
+                });
+                displayNodes = displayNodes.filter(n => linkedNodeIds.has(n.id));
+            } else {
+                displayNodes = Array.from(allNodesMap.values());
+                displayLinks = linksData.map(d => ({
+                    source: d.source,
+                    target: d.target,
+                    source_name: d.source_name,
+                    target_name: d.target_name
+                }));
+            }
+
+            const topNodes = displayNodes.filter(n => top10Ids.has(n.id));
+            const otherNodes = displayNodes.filter(n => !top10Ids.has(n.id));
+
+            topNodes.sort((a, b) => b.degree - a.degree);
+
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const outerRadius = Math.min(width, height) * 0.35;
+            const innerRadius = outerRadius * 0.4;
+
+            topNodes.forEach((node, i) => {
+                const angle = (i / topNodes.length) * 2 * Math.PI - Math.PI / 2;
+                node.fx = centerX + outerRadius * Math.cos(angle);
+                node.fy = centerY + outerRadius * Math.sin(angle);
+            });
+
+            const neighborsByTop = new Map();
+            otherNodes.forEach(node => {
+                let parentTop = null;
+                let maxSharedDegree = -1;
+                
+                linksData.forEach(link => {
+                    if (link.source === node.id && top10Ids.has(link.target)) {
+                        const topNode = topNodes.find(n => n.id === link.target);
+                        if (topNode && topNode.degree > maxSharedDegree) {
+                            maxSharedDegree = topNode.degree;
+                            parentTop = topNode;
+                        }
+                    }
+                    if (link.target === node.id && top10Ids.has(link.source)) {
+                        const topNode = topNodes.find(n => n.id === link.source);
+                        if (topNode && topNode.degree > maxSharedDegree) {
+                            maxSharedDegree = topNode.degree;
+                            parentTop = topNode;
+                        }
+                    }
+                });
+
+                if (parentTop) {
+                    if (!neighborsByTop.has(parentTop.id)) {
+                        neighborsByTop.set(parentTop.id, []);
+                    }
+                    neighborsByTop.get(parentTop.id).push(node);
+                }
+            });
+
+            topNodes.forEach((topNode, i) => {
+                const neighbors = neighborsByTop.get(topNode.id) || [];
+                const angleOffset = (i / topNodes.length) * 2 * Math.PI - Math.PI / 2;
+                
+                neighbors.forEach((neighbor, j) => {
+                    const neighborAngle = angleOffset + ((j + 1) / (neighbors.length + 1)) * 0.6 - 0.3;
+                    neighbor.fx = topNode.fx + innerRadius * Math.cos(neighborAngle);
+                    neighbor.fy = topNode.fy + innerRadius * Math.sin(neighborAngle);
+                });
+            });
+
+            let simulation = d3.forceSimulation(displayNodes)
+                .force('link', d3.forceLink(displayLinks).id(d => d.id).distance(showTop10 ? 50 : 80))
+                .force('charge', d3.forceManyBody().strength(showTop10 ? -150 : -300))
+                .force('center', d3.forceCenter(centerX, centerY))
+                .force('collision', d3.forceCollide().radius(showTop10 ? 15 : 30));
+
+            const link = svg.append('g')
+                .attr('class', 'links')
+                .selectAll('line')
+                .data(displayLinks)
+                .join('line')
+                .attr('stroke', '#666')
+                .attr('stroke-opacity', 0.4)
+                .attr('stroke-width', showTop10 ? 2 : 3);
+
+            const linkLabel = showTop10 ? null : svg.append('g')
+                .attr('class', 'link-labels')
+                .selectAll('text')
+                .data(displayLinks)
+                .join('text')
+                .attr('class', 'link-label')
+                .text(d => `${d.source_name} → ${d.target_name}`);
+
+            const otherNodeGroup = svg.append('g')
+                .attr('class', 'other-nodes');
+            const otherNode = otherNodeGroup.selectAll('circle')
+                .data(otherNodes)
+                .join('circle')
+                .attr('r', showTop10 ? 2 : 4)
+                .attr('fill', d => colorScale(d.continent))
+                .attr('stroke', 'none')
+                .attr('fill-opacity', 0.6)
+                .call(drag(simulation));
+
+            const topNodeGroup = svg.append('g')
+                .attr('class', 'top-nodes');
+            const node = topNodeGroup.selectAll('circle')
+                .data(topNodes)
+                .join('circle')
+                .attr('r', 12)
+                .attr('fill', d => colorScale(d.continent))
+                .call(drag(simulation));
+
+            const nodeLabelsGroup = showTop10 ? svg.append('g').attr('class', 'node-labels') : null;
+            const nodeNameLabel = showTop10 ? nodeLabelsGroup.selectAll('text.name')
+                .data(topNodes)
+                .join('text')
+                .attr('class', 'node-label name')
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#e0e0e0')
+                .attr('font-weight', 600)
+                .text(d => d.name)
+                : null;
+
+            const nodeDegreeLabel = showTop10 ? nodeLabelsGroup.selectAll('text.degree')
+                .data(topNodes)
+                .join('text')
+                .attr('class', 'node-label degree')
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#e0e0e0')
+                .attr('font-weight', 600)
+                .text(d => `(${d.degree})`) : null;
+
+            const tooltip = d3.select('#network-graph')
+                .append('div')
+                .style('position', 'absolute')
+                .style('background', 'rgba(0,0,0,0.8)')
+                .style('color', 'white')
+                .style('padding', '5px 10px')
+                .style('border-radius', '4px')
+                .style('font-size', '12px')
+                .style('pointer-events', 'none')
+                .style('opacity', 0);
+
+            function handleMouseOver(event, d) {
+                d3.select(this).attr('r', showTop10 && !top10Ids.has(d.id) ? 6 : 16);
+                tooltip.transition().duration(200).style('opacity', 1);
+                tooltip.html(`<strong>${d.name}</strong><br>Country: ${d.country}<br>ID: ${d.id}<br>Degree: ${d.degree}`)
+                    .style('left', (event.offsetX + 10) + 'px')
+                    .style('top', (event.offsetY - 28) + 'px');
+            }
+
+            function handleMouseOut() {
+                const isOther = !top10Ids.has(d3.select(this).datum().id);
+                d3.select(this).attr('r', showTop10 && isOther ? 2 : (isOther ? 4 : 12));
+                tooltip.transition().duration(200).style('opacity', 0);
+            }
+
+            node.on('mouseover', handleMouseOver).on('mouseout', handleMouseOut);
+            if (otherNode) {
+                otherNode.on('mouseover', handleMouseOver).on('mouseout', handleMouseOut);
+            }
+
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                if (!showTop10 && linkLabel) {
+                    linkLabel
+                        .attr('x', d => (d.source.x + d.target.x) / 2)
+                        .attr('y', d => (d.source.y + d.target.y) / 2);
+                }
+
+                otherNode
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+
+                if (nodeNameLabel) {
+                    nodeNameLabel
+                        .attr('x', d => d.x)
+                        .attr('y', d => d.y + 20);
+                }
+                if (nodeDegreeLabel) {
+                    nodeDegreeLabel
+                        .attr('x', d => d.x)
+                        .attr('y', d => d.y + 38);
+                }
+            });
+
+            function drag(simulation) {
+                function dragstarted(event) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                }
+                function dragged(event) {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                }
+                function dragended(event) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    if (showTop10 && top10Ids.has(event.subject.id)) {
+                        const idx = topNodes.findIndex(n => n.id === event.subject.id);
+                        if (idx !== -1) {
+                            const angle = (idx / topNodes.length) * 2 * Math.PI - Math.PI / 2;
+                            event.subject.fx = centerX + outerRadius * Math.cos(angle);
+                            event.subject.fy = centerY + outerRadius * Math.sin(angle);
+                        }
+                    } else {
+                        event.subject.fx = null;
+                        event.subject.fy = null;
+                    }
+                }
+                return d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended);
+            }
+
+            window.resetZoom = function() {
+                simulation.alpha(1).restart();
+                svg.transition().duration(750).call(
+                    d3.zoom().transform,
+                    d3.zoomIdentity
+                );
+            };
+
+            window.forceEnabled = true;
+            window.toggleForce = function() {
+                window.forceEnabled = !window.forceEnabled;
+                if (window.forceEnabled) {
+                    simulation.alpha(0.3).restart();
+                } else {
+                    simulation.stop();
+                }
+            };
+
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    svg.selectAll('g').attr('transform', event.transform);
+                });
+
+            svg.call(zoom);
+
+            window.downloadSVG = function() {
+                const svgElement = document.querySelector('#network-graph svg');
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svgElement);
+                const blob = new Blob([svgString], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'network-graph.svg';
+                link.click();
+                URL.revokeObjectURL(url);
+            };
+
+            window.downloadPNG = function() {
+                const svgElement = document.querySelector('#network-graph svg');
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const svgString = new XMLSerializer().serializeToString(svgElement);
+                const img = new Image();
+                
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+                
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const pngUrl = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.href = pngUrl;
+                    link.download = 'network-graph.png';
+                    link.click();
+                    URL.revokeObjectURL(url);
+                };
+                
+                img.src = url;
+            };
+        }
+
+        function createAllCitiesGraph(citiesData, linksData) {
+            const width = document.getElementById('all-cities-graph').clientWidth;
+            const height = 500;
+
+            const svg = d3.select('#all-cities-graph')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .attr('viewBox', [0, 0, width, height]);
+
+            svg.append('rect')
+                .attr('width', width)
+                .attr('height', height)
+                .attr('fill', '#0f0f0f');
+
+            const cityMap = new Map();
+            citiesData.forEach(city => {
+                cityMap.set(city.id, city);
+            });
+
+            const allNodesMap = new Map();
+            linksData.forEach(link => {
+                if (!allNodesMap.has(link.source)) {
+                    allNodesMap.set(link.source, { 
+                        id: link.source, 
+                        name: cityMap.get(link.source)?.name || link.source, 
+                        continent: cityMap.get(link.source)?.continent || 'Unknown', 
+                        country: cityMap.get(link.source)?.country || 'Unknown',
+                        degree: 0 
+                    });
+                }
+                if (!allNodesMap.has(link.target)) {
+                    allNodesMap.set(link.target, { 
+                        id: link.target, 
+                        name: cityMap.get(link.target)?.name || link.target, 
+                        continent: cityMap.get(link.target)?.continent || 'Unknown', 
+                        country: cityMap.get(link.target)?.country || 'Unknown',
+                        degree: 0 
+                    });
+                }
+                allNodesMap.get(link.source).degree++;
+                allNodesMap.get(link.target).degree++;
+            });
+
+            const sortedNodes = Array.from(allNodesMap.values()).sort((a, b) => b.degree - a.degree);
+            const allLinks = linksData.map(d => ({
+                source: d.source,
+                target: d.target,
+                source_name: d.source_name,
+                target_name: d.target_name
+            }));
+
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = Math.min(width, height) * 0.4;
+
+            const nodes = sortedNodes.map((node, i) => {
+                const angle = (i / sortedNodes.length) * 2 * Math.PI - Math.PI / 2;
+                node.fx = centerX + radius * Math.cos(angle);
+                node.fy = centerY + radius * Math.sin(angle);
+                return node;
+            });
+
+            let simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(allLinks).id(d => d.id).distance(40))
+                .force('charge', d3.forceManyBody().strength(-50))
+                .force('center', d3.forceCenter(centerX, centerY))
+                .force('collision', d3.forceCollide().radius(12));
+
+            const link = svg.append('g')
+                .attr('class', 'links')
+                .selectAll('line')
+                .data(allLinks)
+                .join('line')
+                .attr('stroke', '#666')
+                .attr('stroke-opacity', 0.3)
+                .attr('stroke-width', 0.5);
+
+            const node = svg.append('g')
+                .attr('class', 'nodes')
+                .selectAll('circle')
+                .data(nodes)
+                .join('circle')
+                .attr('r', d => Math.max(3, Math.min(8, Math.sqrt(d.degree) * 1.5)))
+                .attr('fill', d => colorScale(d.continent))
+                .attr('fill-opacity', 0.7)
+                .call(d3.drag()
+                    .on('start', function(event, d) {
+                        if (!event.active) simulation.alphaTarget(0.3).restart();
+                        d.fx = d.x;
+                        d.fy = d.y;
+                    })
+                    .on('drag', function(event, d) {
+                        d.fx = event.x;
+                        d.fy = event.y;
+                    })
+                    .on('end', function(event, d) {
+                        d.fx = null;
+                        d.fy = null;
+                    }));
+
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+            });
+
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    svg.selectAll('g').attr('transform', event.transform);
+                });
+
+            svg.call(zoom);
+        }
+    </script>
+</body>
+
+{% enddemo %}
