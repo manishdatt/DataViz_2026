@@ -1,0 +1,1596 @@
+---
+title: State of Crossref metadata by member country
+author: Manish Datt
+date: '2026-05-19'
+description: Top 10 countries by total number of members in the Crossref data as on April 2026.
+image: Crossref_metadata.png
+categories:
+- Chartsjs
+- TidyTuesday
+layout: false
+slug: 2653
+---
+
+<h2 class="text-2xl lg:text-3xl mb-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crossref Member Participation Explorer</title>
+    <meta name="description"
+        content="Interactive dashboard exploring scholarly metadata deposit rates by country and region using Tabulator and Tailwind CSS.">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            750: '#1e293b',
+                            850: '#0f172a',
+                            950: '#020617'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Tabulator CSS & JS CDNs -->
+    <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+
+    <!-- PapaParse CDN for CSV Parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Chart.js CDN for beautiful interactive charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Custom Premium Styles for Tabulator Dark Theme Overrides -->
+    <style>
+        /* Smooth scroll and modern scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+
+        /* Glassmorphism utility classes */
+        .glass-card {
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .glass-header {
+            background: rgba(2, 6, 23, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        /* Tabulator Premium High-Contrast Light Theme Overrides */
+        .tabulator {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            overflow: hidden !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+
+        .tabulator-header {
+            background: #f8fafc !important;
+            border-bottom: 2px solid #cbd5e1 !important;
+            color: #475569 !important;
+            font-weight: 600 !important;
+            text-transform: uppercase !important;
+            font-size: 0.75rem !important;
+            letter-spacing: 0.05em !important;
+        }
+
+        .tabulator-col {
+            background: transparent !important;
+            border-right: 1px solid #e2e8f0 !important;
+            height: 48px !important;
+        }
+
+        .tabulator-col-title {
+            color: #1e293b !important;
+        }
+
+        .tabulator-row {
+            background: #ffffff !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            color: #0f172a !important;
+            min-height: 52px !important;
+            transition: all 0.2s ease;
+        }
+
+        .tabulator-row:nth-child(even) {
+            background: #f8fafc !important;
+        }
+
+        .tabulator-row:hover {
+            background: #f1f5f9 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        }
+
+        .tabulator-cell {
+            border-right: 1px solid #e2e8f0 !important;
+            padding: 10px 14px !important;
+            color: #0f172a !important;
+        }
+
+        .tabulator-footer {
+            background: #f8fafc !important;
+            border-top: 1px solid #cbd5e1 !important;
+            color: #475569 !important;
+        }
+
+        .tabulator-page {
+            background: #ffffff !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #334155 !important;
+            border-radius: 6px !important;
+            transition: all 0.15s ease;
+        }
+
+        .tabulator-page.active {
+            background: #6366f1 !important;
+            border-color: #6366f1 !important;
+            color: #ffffff !important;
+        }
+
+        .tabulator-page:hover:not(.active) {
+            background: rgba(99, 102, 241, 0.1) !important;
+            color: #6366f1 !important;
+        }
+
+        .tabulator-footer .tabulator-page-size {
+            background: #ffffff !important;
+            color: #1e293b !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            padding: 4px 8px !important;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased overflow-x-hidden">
+
+    <!-- Glowing Background blobs for futuristic high-end feel -->
+    <div
+        class="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none -z-10">
+    </div>
+    <div
+        class="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none -z-10">
+    </div>
+    <div
+        class="absolute bottom-10 left-1/3 w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[150px] pointer-events-none -z-10">
+    </div>
+
+    <!-- Header Section -->
+    <header class="glass-header sticky top-0 z-40 border-b border-slate-800/80 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div
+                    class="p-2.5 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/20">
+                    <i data-lucide="globe" class="w-6 h-6 text-white animate-pulse"></i>
+                </div>
+                <div>
+                    <h1
+                        class="text-xl md:text-2xl font-bold font-heading bg-gradient-to-r from-white via-slate-100 to-indigo-300 bg-clip-text text-transparent">
+                        Crossref Metadata Deposit Explorer
+                    </h1>
+                    <p class="text-xs text-slate-400 mt-0.5">Interactive tracking of global metadata deposit rates
+                        (References, Abstracts, ORCIDs, and RORs)</p>
+                </div>
+            </div>
+
+            <!-- Quick Date Select & Theme info -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="resetDashboard()"
+                    class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3.5 py-2.5 rounded-lg border border-slate-700/50 transition duration-150 font-medium">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    Reset filters
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8">
+
+        <!-- Loading overlay -->
+        <div id="loader"
+            class="fixed inset-0 bg-slate-950/80 z-50 flex flex-col items-center justify-center gap-4 transition-all duration-300">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-slate-300 font-medium animate-pulse">Loading dataset and parsing files...</p>
+        </div>
+
+        <!-- Upload Fallback UI (hidden by default) -->
+        <div id="uploadFallback"
+            class="hidden fixed inset-0 bg-slate-950/90 z-50 flex flex-col items-center justify-center p-4">
+            <div
+                class="glass-card max-w-md w-full p-8 rounded-2xl border border-indigo-500/30 text-center space-y-6 shadow-2xl relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl"></div>
+                <div
+                    class="mx-auto w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-400">
+                    <i data-lucide="file-warning" class="w-8 h-8"></i>
+                </div>
+                <div class="space-y-2">
+                    <h3 class="text-xl font-bold text-white font-heading">Local File Access (CORS) Restriction</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        Modern web browsers block direct loading of local CSV files from the filesystem due to security
+                        sandbox policies (CORS) when opening HTML files via double-click.
+                    </p>
+                </div>
+                <div class="border-2 border-dashed border-slate-700 hover:border-indigo-500/80 rounded-xl p-6 transition duration-200 cursor-pointer relative group"
+                    id="dropzone">
+                    <input type="file" id="fallbackFileInput" accept=".csv"
+                        class="absolute inset-0 opacity-0 cursor-pointer">
+                    <div class="space-y-2 pointer-events-none">
+                        <i data-lucide="upload-cloud"
+                            class="w-8 h-8 text-slate-400 group-hover:text-indigo-400 mx-auto transition"></i>
+                        <p class="text-xs font-semibold text-slate-300">Select <code
+                                class="text-indigo-300 font-mono">member_part.csv</code></p>
+                        <p class="text-[10px] text-slate-500">from this folder to load the dashboard offline.</p>
+                    </div>
+                </div>
+                <div class="text-[10px] text-slate-500 leading-relaxed">
+                    Once this post is built and served via your Eleventy local dev server (using an HTTP server), the
+                    dashboard will load the data automatically!
+                </div>
+            </div>
+        </div>
+
+        <!-- 4 KPI Summary Cards -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+            <!-- Card 1: Total Members -->
+            <div
+                class="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-slate-700/50 transition duration-300">
+                <div
+                    class="absolute -right-3 -top-3 w-16 h-16 bg-indigo-500/5 rounded-full group-hover:scale-125 transition duration-500">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Members</span>
+                    <span class="p-1.5 bg-indigo-500/10 text-indigo-400 rounded-lg"><i data-lucide="users"
+                            class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <h3 id="kpiMembers" class="text-2xl md:text-3xl font-extrabold text-white">0</h3>
+                    <p class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                        <span class="text-indigo-400 font-medium" id="kpiCountriesCount">0</span> countries represented
+                    </p>
+                </div>
+            </div>
+
+            <!-- Card 2: References Deposit Rate -->
+            <div
+                class="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-slate-700/50 transition duration-300">
+                <div
+                    class="absolute -right-3 -top-3 w-16 h-16 bg-blue-500/5 rounded-full group-hover:scale-125 transition duration-500">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">References rate</span>
+                    <span class="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg"><i data-lucide="link"
+                            class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <h3 id="kpiRefRate" class="text-2xl md:text-3xl font-extrabold text-white">0.0%</h3>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+                        <div id="kpiRefProgress" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                            style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Abstracts Deposit Rate -->
+            <div
+                class="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-slate-700/50 transition duration-300">
+                <div
+                    class="absolute -right-3 -top-3 w-16 h-16 bg-emerald-500/5 rounded-full group-hover:scale-125 transition duration-500">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Abstracts rate</span>
+                    <span class="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg"><i data-lucide="file-text"
+                            class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <h3 id="kpiAbsRate" class="text-2xl md:text-3xl font-extrabold text-white">0.0%</h3>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+                        <div id="kpiAbsProgress" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+                            style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4: ORCID Rate -->
+            <div
+                class="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-slate-700/50 transition duration-300">
+                <div
+                    class="absolute -right-3 -top-3 w-16 h-16 bg-amber-500/5 rounded-full group-hover:scale-125 transition duration-500">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">ORCID rate</span>
+                    <span class="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg"><i data-lucide="contact"
+                            class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <h3 id="kpiOrcidRate" class="text-2xl md:text-3xl font-extrabold text-white">0.0%</h3>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+                        <div id="kpiOrcidProgress" class="bg-amber-500 h-1.5 rounded-full transition-all duration-500"
+                            style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 5: ROR ID Rate -->
+            <div
+                class="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-slate-700/50 transition duration-300">
+                <div
+                    class="absolute -right-3 -top-3 w-16 h-16 bg-rose-500/5 rounded-full group-hover:scale-125 transition duration-500">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">ROR ID rate</span>
+                    <span class="p-1.5 bg-rose-500/10 text-rose-400 rounded-lg"><i data-lucide="fingerprint"
+                            class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <h3 id="kpiRorRate" class="text-2xl md:text-3xl font-extrabold text-white">0.0%</h3>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+                        <div id="kpiRorProgress" class="bg-rose-500 h-1.5 rounded-full transition-all duration-500"
+                            style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Dashboard: Time Series Growth Chart (Full Width) -->
+        <section class="glass-card rounded-2xl p-5 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h4 class="font-heading font-bold text-white text-base">Metadata Growth & Deposit Rate Trends</h4>
+                    <p class="text-xs text-slate-400">Historical trend mapping across all months</p>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <span class="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span> Members
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                        <span class="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block"></span> Ref %
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> Abstract %
+                    </span>
+                </div>
+            </div>
+            <!-- Container for the Canvas -->
+            <div class="h-80 relative">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Charts Dashboard: Top Countries Breakdown Chart (Full Width, Below Trend Plot) -->
+        <section class="glass-card rounded-2xl p-5 space-y-4">
+            <div class="flex justify-end">
+                <div class="flex items-center gap-2">
+                    <button onclick="downloadChartPNG()"
+                        class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3.5 py-2.5 rounded-lg border border-slate-700/50 transition duration-150 font-medium">
+                        <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                        Download PNG
+                    </button>
+                    <button onclick="downloadChartSVG()"
+                        class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3.5 py-2.5 rounded-lg border border-slate-700/50 transition duration-150 font-medium">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        Download SVG
+                    </button>
+                </div>
+            </div>
+            <!-- Container for Bar Chart -->
+            <div class="h-[480px] relative">
+                <canvas id="topCountriesChart"></canvas>
+                <!-- Title overlaid at bottom right within the graph -->
+                <div class="absolute bottom-32 right-32 text-left pointer-events-none z-10 w-[460px]">
+                    <p class="font-heading text-slate-300 text-lg leading-relaxed font-semibold">
+                        Top 10 countries by number of members in the Crossref data as on April 2026. Inner bars show
+                        number of <span class="text-[#a855f7]">members</span> that have deposited at least one work with
+                        an <span class="text-[#10b981]">abstract</span> and with <span
+                            class="text-[#fbbf24]">funding</span>
+                        metadata.
+                    </p>
+                    <!-- Hidden element to prevent JS update errors -->
+                    <span id="selectedMonthLabel" style="display: none;"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Table Controls & Table Card -->
+        <section class="glass-card rounded-2xl overflow-hidden border border-slate-800/80">
+            <!-- Table Header Controls -->
+            <div class="p-6 border-b border-slate-800/80 bg-slate-900/30 flex flex-col gap-4">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="space-y-1">
+                        <h3 class="text-lg font-bold font-heading text-white">Full Participation Dataset</h3>
+                        <p class="text-xs text-slate-400">Explore, search, filter, and sort members and metadata rates.
+                        </p>
+                    </div>
+
+                    <!-- Table download / exports -->
+                    <div class="flex items-center gap-2 self-start lg:self-auto">
+                        <button onclick="downloadCSV()"
+                            class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-2 rounded-lg border border-slate-700/50 transition">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export CSV
+                        </button>
+                        <button onclick="downloadJSON()"
+                            class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-2 rounded-lg border border-slate-700/50 transition">
+                            <i data-lucide="file-code" class="w-3.5 h-3.5"></i> Export JSON
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Filters Bar -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                    <!-- Search Input -->
+                    <div class="relative md:col-span-2">
+                        <span
+                            class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                        </span>
+                        <input id="searchInput" type="text" placeholder="Search by Country Name, ISO3, or Region..."
+                            class="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 focus:border-indigo-500 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none transition duration-150 shadow-inner">
+                    </div>
+
+                    <!-- Region Selector -->
+                    <div class="flex items-center gap-2 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2.5">
+                        <i data-lucide="map" class="w-4 h-4 text-indigo-400 flex-shrink-0"></i>
+                        <select id="regionSelect"
+                            class="bg-transparent text-sm text-slate-200 focus:outline-none cursor-pointer w-full">
+                            <option class="bg-slate-950" value="All">All Regions</option>
+                        </select>
+                    </div>
+
+                    <!-- Page Size Selector -->
+                    <div class="flex items-center gap-2 bg-slate-950 border border-slate-850 rounded-xl px-3 py-2.5">
+                        <i data-lucide="layout-grid" class="w-4 h-4 text-indigo-400 flex-shrink-0"></i>
+                        <select id="pageSizeSelect"
+                            class="bg-transparent text-sm text-slate-200 focus:outline-none cursor-pointer w-full">
+                            <option class="bg-slate-950" value="10">10 rows per page</option>
+                            <option class="bg-slate-950" value="25">25 rows per page</option>
+                            <option class="bg-slate-950" value="50">50 rows per page</option>
+                            <option class="bg-slate-950" value="100">100 rows per page</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Column Toggles Container -->
+                <div class="flex items-center gap-3 flex-wrap pt-2 border-t border-slate-850/60 mt-1">
+                    <span class="text-xs text-slate-400 font-semibold mr-1">Visible Rates:</span>
+                    <label
+                        class="inline-flex items-center gap-2 bg-slate-950 border border-slate-850/50 hover:border-slate-800/80 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 cursor-pointer select-none transition">
+                        <input type="checkbox" id="colToggleRef" checked class="accent-indigo-500 rounded focus:ring-0">
+                        References
+                    </label>
+                    <label
+                        class="inline-flex items-center gap-2 bg-slate-950 border border-slate-850/50 hover:border-slate-800/80 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 cursor-pointer select-none transition">
+                        <input type="checkbox" id="colToggleAbs" checked
+                            class="accent-emerald-500 rounded focus:ring-0"> Abstracts
+                    </label>
+                    <label
+                        class="inline-flex items-center gap-2 bg-slate-950 border border-slate-850/50 hover:border-slate-800/80 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 cursor-pointer select-none transition">
+                        <input type="checkbox" id="colToggleOrcid" checked
+                            class="accent-amber-500 rounded focus:ring-0"> ORCIDs
+                    </label>
+                    <label
+                        class="inline-flex items-center gap-2 bg-slate-950 border border-slate-850/50 hover:border-slate-800/80 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 cursor-pointer select-none transition">
+                        <input type="checkbox" id="colToggleRor" checked class="accent-rose-500 rounded focus:ring-0">
+                        ROR IDs
+                    </label>
+                    <label
+                        class="inline-flex items-center gap-2 bg-slate-950 border border-slate-850/50 hover:border-slate-800/80 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 cursor-pointer select-none transition">
+                        <input type="checkbox" id="colToggleLicense" checked
+                            class="accent-violet-500 rounded focus:ring-0"> Licenses
+                    </label>
+                    <label
+                        class="inline-flex items-center gap-2 bg-slate-950 border border-slate-850/50 hover:border-slate-800/80 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 cursor-pointer select-none transition">
+                        <input type="checkbox" id="colToggleFunding" checked
+                            class="accent-teal-500 rounded focus:ring-0"> Funding
+                    </label>
+                </div>
+            </div>
+
+            <!-- The Tabulator Element -->
+            <div id="tabulatorTable" class="w-full"></div>
+        </section>
+
+        <!-- Section 2: Metadata Coverage Table -->
+        <section class="max-w-7xl mx-auto px-6 pb-12 w-full">
+            <h2 class="text-xl font-bold text-slate-100 mb-4 flex items-center gap-2">
+                <i data-lucide="database" class="w-5 h-5 text-teal-400"></i>
+                Metadata Coverage
+                <span class="text-xs text-slate-400 font-normal ml-2 tracking-wide">(Source: metadata_cover.csv)</span>
+            </h2>
+            <div
+                class="glass-card rounded-2xl shadow-xl border border-slate-800/60 p-5 w-full overflow-hidden flex flex-col gap-4">
+                <div id="metadataTabulatorTable" class="w-full"></div>
+            </div>
+        </section>
+    </main>
+
+
+
+    <!-- JavaScript logic -->
+    <script>
+        // Global variables
+        let rawCSVData = [];
+        let rawMetadataCSVData = [];
+        let uniqueDates = [];
+        let uniqueRegions = [];
+        let tabulatorTable = null;
+        let metadataTabulatorTable = null;
+        let trendChart = null;
+        let topCountriesChart = null;
+        let isTableInitialized = false;
+        let isMetadataTableInitialized = false;
+
+        // Rich dictionary mapping ISO3 -> ISO2 & Full Country Name
+        const countryMeta = {
+            "AFG": { code: "af", name: "Afghanistan" },
+            "ALB": { code: "al", name: "Albania" },
+            "DZA": { code: "dz", name: "Algeria" },
+            "AND": { code: "ad", name: "Andorra" },
+            "AGO": { code: "ao", name: "Angola" },
+            "ARG": { code: "ar", name: "Argentina" },
+            "ARM": { code: "am", name: "Armenia" },
+            "AUS": { code: "au", name: "Australia" },
+            "AUT": { code: "at", name: "Austria" },
+            "AZE": { code: "az", name: "Azerbaijan" },
+            "BHS": { code: "bs", name: "Bahamas" },
+            "BHR": { code: "bh", name: "Bahrain" },
+            "BGD": { code: "bd", name: "Bangladesh" },
+            "BRB": { code: "bb", name: "Barbados" },
+            "BLR": { code: "by", name: "Belarus" },
+            "BEL": { code: "be", name: "Belgium" },
+            "BLZ": { code: "bz", name: "Belize" },
+            "BEN": { code: "bj", name: "Benin" },
+            "BTN": { code: "bt", name: "Bhutan" },
+            "BOL": { code: "bo", name: "Bolivia" },
+            "BIH": { code: "ba", name: "Bosnia & Herzegovina" },
+            "BWA": { code: "bw", name: "Botswana" },
+            "BRA": { code: "br", name: "Brazil" },
+            "BRN": { code: "bn", name: "Brunei" },
+            "BGR": { code: "bg", name: "Bulgaria" },
+            "BFA": { code: "bf", name: "Burkina Faso" },
+            "BDI": { code: "bi", name: "Burundi" },
+            "KHM": { code: "kh", name: "Cambodia" },
+            "CMR": { code: "cm", name: "Cameroon" },
+            "CAN": { code: "ca", name: "Canada" },
+            "CAF": { code: "cf", name: "Central African Republic" },
+            "CHL": { code: "cl", name: "Chile" },
+            "CHN": { code: "cn", name: "China" },
+            "COL": { code: "co", name: "Colombia" },
+            "COM": { code: "km", name: "Comoros" },
+            "COD": { code: "cd", name: "Congo, Dem. Rep." },
+            "COG": { code: "cg", name: "Congo, Rep." },
+            "CRI": { code: "cr", name: "Costa Rica" },
+            "CIV": { code: "ci", name: "Côte d'Ivoire" },
+            "HRV": { code: "hr", name: "Croatia" },
+            "CUB": { code: "cu", name: "Cuba" },
+            "CYP": { code: "cy", name: "Cyprus" },
+            "CZE": { code: "cz", name: "Czech Republic" },
+            "DNK": { code: "dk", name: "Denmark" },
+            "DOM": { code: "do", name: "Dominican Republic" },
+            "ECU": { code: "ec", name: "Ecuador" },
+            "EGY": { code: "eg", name: "Egypt" },
+            "SLV": { code: "sv", name: "El Salvador" },
+            "EST": { code: "ee", name: "Estonia" },
+            "ETH": { code: "et", name: "Ethiopia" },
+            "FJI": { code: "fj", name: "Fiji" },
+            "FIN": { code: "fi", name: "Finland" },
+            "FRA": { code: "fr", name: "France" },
+            "FRO": { code: "fo", name: "Faroe Islands" },
+            "GAB": { code: "ga", name: "Gabon" },
+            "GEO": { code: "ge", name: "Georgia" },
+            "DEU": { code: "de", name: "Germany" },
+            "GHA": { code: "gh", name: "Ghana" },
+            "GRC": { code: "gr", name: "Greece" },
+            "GTM": { code: "gt", name: "Guatemala" },
+            "GUY": { code: "gy", name: "Guyana" },
+            "HTI": { code: "ht", name: "Haiti" },
+            "HND": { code: "hn", name: "Honduras" },
+            "HKG": { code: "hk", name: "Hong Kong" },
+            "HUN": { code: "hu", name: "Hungary" },
+            "ISL": { code: "is", name: "Iceland" },
+            "IND": { code: "in", name: "India" },
+            "IDN": { code: "id", name: "Indonesia" },
+            "IRQ": { code: "iq", name: "Iraq" },
+            "IRL": { code: "ie", name: "Ireland" },
+            "ISR": { code: "il", name: "Israel" },
+            "ITA": { code: "it", name: "Italy" },
+            "JAM": { code: "jm", name: "Jamaica" },
+            "JPN": { code: "jp", name: "Japan" },
+            "JOR": { code: "jo", name: "Jordan" },
+            "KAZ": { code: "kz", name: "Kazakhstan" },
+            "KEN": { code: "ke", name: "Kenya" },
+            "KOR": { code: "kr", name: "South Korea" },
+            "KWT": { code: "kw", name: "Kuwait" },
+            "KGZ": { code: "kg", name: "Kyrgyzstan" },
+            "LAO": { code: "la", name: "Laos" },
+            "LVA": { code: "lv", name: "Latvia" },
+            "LBN": { code: "lb", name: "Lebanon" },
+            "LBR": { code: "lr", name: "Liberia" },
+            "LBY": { code: "ly", name: "Libya" },
+            "LTU": { code: "lt", name: "Lithuania" },
+            "LUX": { code: "lu", name: "Luxembourg" },
+            "MAC": { code: "mo", name: "Macau" },
+            "MKD": { code: "mk", name: "North Macedonia" },
+            "MDG": { code: "mg", name: "Madagascar" },
+            "MWI": { code: "mw", name: "Malawi" },
+            "MYS": { code: "my", name: "Malaysia" },
+            "MDV": { code: "mv", name: "Maldives" },
+            "MLI": { code: "ml", name: "Mali" },
+            "MLT": { code: "mt", name: "Malta" },
+            "MCO": { code: "mc", name: "Monaco" },
+            "MNG": { code: "mn", name: "Mongolia" },
+            "MNE": { code: "me", name: "Montenegro" },
+            "MAR": { code: "ma", name: "Morocco" },
+            "MOZ": { code: "mz", name: "Mozambique" },
+            "MMR": { code: "mm", name: "Myanmar" },
+            "NAM": { code: "na", name: "Namibia" },
+            "NPL": { code: "np", name: "Nepal" },
+            "NLD": { code: "nl", name: "Netherlands" },
+            "NZL": { code: "nz", name: "New Zealand" },
+            "NIC": { code: "ni", name: "Nicaragua" },
+            "NER": { code: "ne", name: "Niger" },
+            "NGA": { code: "ng", name: "Nigeria" },
+            "NOR": { code: "no", name: "Norway" },
+            "OMN": { code: "om", name: "Oman" },
+            "PAK": { code: "pk", name: "Pakistan" },
+            "PAN": { code: "pa", name: "Panama" },
+            "PNG": { code: "pg", name: "Papua New Guinea" },
+            "PRY": { code: "py", name: "Paraguay" },
+            "PER": { code: "pe", name: "Peru" },
+            "PHL": { code: "ph", name: "Philippines" },
+            "POL": { code: "pl", name: "Poland" },
+            "PRT": { code: "pt", name: "Portugal" },
+            "PRI": { code: "pr", name: "Puerto Rico" },
+            "QAT": { code: "qa", name: "Qatar" },
+            "ROU": { code: "ro", name: "Romania" },
+            "RUS": { code: "ru", name: "Russia" },
+            "RWA": { code: "rw", name: "Rwanda" },
+            "SAU": { code: "sa", name: "Saudi Arabia" },
+            "SEN": { code: "sn", name: "Senegal" },
+            "SRB": { code: "rs", name: "Serbia" },
+            "SGP": { code: "sg", name: "Singapore" },
+            "SVK": { code: "sk", name: "Slovakia" },
+            "SVN": { code: "si", name: "Slovenia" },
+            "SOM": { code: "so", name: "Somalia" },
+            "ZAF": { code: "za", name: "South Africa" },
+            "ESP": { code: "es", name: "Spain" },
+            "LKA": { code: "lk", name: "Sri Lanka" },
+            "SDN": { code: "sd", name: "Sudan" },
+            "SWE": { code: "se", name: "Sweden" },
+            "CHE": { code: "ch", name: "Switzerland" },
+            "SYR": { code: "sy", name: "Syria" },
+            "TWN": { code: "tw", name: "Taiwan" },
+            "TJK": { code: "tj", name: "Tajikistan" },
+            "TZA": { code: "tz", name: "Tanzania" },
+            "THA": { code: "th", name: "Thailand" },
+            "TLS": { code: "tl", name: "Timor-Leste" },
+            "TGO": { code: "tg", name: "Togo" },
+            "TTO": { code: "tt", name: "Trinidad & Tobago" },
+            "TUN": { code: "tn", name: "Tunisia" },
+            "TUR": { code: "tr", name: "Turkey" },
+            "UGA": { code: "ug", name: "Uganda" },
+            "UKR": { code: "ua", name: "Ukraine" },
+            "ARE": { code: "ae", name: "United Arab Emirates" },
+            "GBR": { code: "gb", name: "United Kingdom" },
+            "USA": { code: "us", name: "United States" },
+            "URY": { code: "uy", name: "Uruguay" },
+            "UZB": { code: "uz", name: "Uzbekistan" },
+            "VAT": { code: "va", name: "Vatican City" },
+            "VEN": { code: "ve", name: "Venezuela" },
+            "VNM": { code: "vn", name: "Vietnam" },
+            "YEM": { code: "ye", name: "Yemen" },
+            "ZMB": { code: "zm", name: "Zambia" },
+            "ZWE": { code: "zw", name: "Zimbabwe" },
+            "PSE": { code: "ps", name: "Palestine" },
+            "XKX": { code: "xk", name: "Kosovo" },
+            "VGB": { code: "vg", name: "British Virgin Islands" },
+            "PYF": { code: "pf", name: "French Polynesia" }
+        };
+
+        // Initialize App on DOM load
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            loadAndParseCSV();
+        });
+
+        // Fetch and Parse the CSV files
+        function loadAndParseCSV() {
+            Promise.all([
+                fetch('./member_part.csv').then(res => {
+                    if (!res.ok) throw new Error("Could not fetch member_part.csv");
+                    return res.text();
+                }),
+                fetch('./metadata_cover.csv').then(res => {
+                    if (!res.ok) throw new Error("Could not fetch metadata_cover.csv");
+                    return res.text();
+                })
+            ])
+                .then(([memberCSVText, metadataCSVText]) => {
+                    parseBothCSVText(memberCSVText, metadataCSVText);
+                })
+                .catch(err => {
+                    console.warn("Network fetch failed. Activating uploader fallback. Error: ", err);
+                    showUploadFallback();
+                });
+        }
+
+        // CSV parsing core function for both datasets
+        function parseBothCSVText(memberText, metadataText) {
+            Papa.parse(memberText, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function (res1) {
+                    rawCSVData = res1.data.filter(row => row.current_up_to && row.iso3_code);
+                    console.log("Parsed member rows: ", rawCSVData.length);
+
+                    uniqueDates = [...new Set(rawCSVData.map(r => r.current_up_to))].sort().reverse();
+                    uniqueRegions = [...new Set(rawCSVData.map(r => r.region_id))].filter(Boolean).sort();
+
+                    Papa.parse(metadataText, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        complete: function (res2) {
+                            rawMetadataCSVData = res2.data.filter(row => row.current_up_to && row.iso3_code);
+                            console.log("Parsed metadata rows: ", rawMetadataCSVData.length);
+
+                            // Hide loader and fallback
+                            document.getElementById('loader').classList.add('hidden');
+                            document.getElementById('uploadFallback').classList.add('hidden');
+
+                            // Initialize dashboard selectors and render
+                            initSelectors();
+                            renderTrendLineChart();
+                            updateDashboardData();
+                        },
+                        error: function (err) {
+                            console.error("Metadata CSV parsing error: ", err);
+                            alert("Error parsing metadata_cover.csv");
+                        }
+                    });
+                },
+                error: function (err) {
+                    console.error("Member CSV parsing error: ", err);
+                    alert("Error parsing member_part.csv");
+                }
+            });
+        }
+
+        // Show the upload drag-and-drop fallback UI
+        function showUploadFallback() {
+            document.getElementById('loader').classList.add('hidden');
+            const fallbackUI = document.getElementById('uploadFallback');
+            fallbackUI.classList.remove('hidden');
+
+            const fileInput = document.getElementById('fallbackFileInput');
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function (evt) {
+                        parseCSVText(evt.target.result);
+                    };
+                    reader.readAsText(file);
+                }
+            });
+        }
+
+        // Initialize dynamic selects
+        function initSelectors() {
+            const regionSelect = document.getElementById('regionSelect');
+            regionSelect.innerHTML = '<option value="All" class="bg-slate-950">All Regions</option>' +
+                uniqueRegions.map(r => `<option value="${r}" class="bg-slate-950">${r}</option>`).join('');
+
+            // Event Listeners for Filters
+            regionSelect.addEventListener('change', updateDashboardData);
+            document.getElementById('searchInput').addEventListener('input', applyTableFilters);
+            document.getElementById('pageSizeSelect').addEventListener('change', handlePageSizeChange);
+
+            // Column visibility toggle listeners
+            setupColumnToggles();
+        }
+
+        // Return mapped country data
+        function getCountryName(iso3) {
+            return countryMeta[iso3] ? countryMeta[iso3].name : iso3;
+        }
+
+        function getCountryFlagUrl(iso3) {
+            if (countryMeta[iso3]) {
+                const code2 = countryMeta[iso3].code;
+                return `https://flagcdn.com/w20/${code2}.png`;
+            }
+            return ""; // no flag if not mapped
+        }
+
+        // Retrieve current active filters for member data
+        function getFilteredData() {
+            const selectedRegion = document.getElementById('regionSelect').value;
+
+            return rawCSVData.filter(row => {
+                const regionMatch = selectedRegion === 'All' || row.region_id === selectedRegion;
+                return regionMatch;
+            });
+        }
+
+        // Retrieve current active filters for metadata data
+        function getFilteredMetadataData() {
+            const selectedRegion = document.getElementById('regionSelect').value;
+
+            return rawMetadataCSVData.filter(row => {
+                const regionMatch = selectedRegion === 'All' || row.region_id === selectedRegion;
+                return regionMatch;
+            });
+        }
+
+        // Reset all dynamic filters to default state
+        function resetDashboard() {
+            document.getElementById('regionSelect').value = 'All';
+            document.getElementById('searchInput').value = '';
+            document.getElementById('pageSizeSelect').value = '10';
+
+            // reset checkbox visibility
+            document.getElementById('colToggleRef').checked = true;
+            document.getElementById('colToggleAbs').checked = true;
+            document.getElementById('colToggleOrcid').checked = true;
+            document.getElementById('colToggleRor').checked = true;
+            document.getElementById('colToggleLicense').checked = true;
+            document.getElementById('colToggleFunding').checked = true;
+
+            if (tabulatorTable) {
+                tabulatorTable.setPageSize(10);
+            }
+            if (metadataTabulatorTable) {
+                metadataTabulatorTable.setPageSize(10);
+            }
+
+            updateDashboardData();
+        }
+
+        // Main data update dispatcher
+        function updateDashboardData() {
+            const filteredData = getFilteredData();
+
+            // 1. Recalculate and update top KPI widgets
+            updateKpiWidgets(filteredData);
+
+            // 2. Render country breakdown bar chart
+            renderTopCountriesChart(filteredData);
+
+            // 3. Render / Update Tabulator Tables
+            renderTabulatorTable(filteredData);
+            renderMetadataTabulatorTable(getFilteredMetadataData());
+
+            // 4. Update dynamic month labels
+            const latestMonth = uniqueDates[0] || 'N/A';
+            document.getElementById('selectedMonthLabel').innerText = `Latest snapshot: ${latestMonth}`;
+
+            // Run global text search filter on new data load if query exists
+            applyTableFilters();
+        }
+
+        // Calculate and animate KPI stats (uses latest month snapshot to avoid double counting members)
+        function updateKpiWidgets(data) {
+            const latestDate = uniqueDates[0];
+            const latestData = data.filter(r => r.current_up_to === latestDate);
+
+            let totalMembers = 0;
+            let totalRef = 0;
+            let totalAbs = 0;
+            let totalOrcid = 0;
+            let totalRor = 0;
+            let distinctCountries = new Set();
+
+            latestData.forEach(r => {
+                const m = r.total_members || 0;
+                totalMembers += m;
+                totalRef += r.deposits_ref || 0;
+                totalAbs += r.deposits_abstract || 0;
+                totalOrcid += r.deposits_orcid || 0;
+                totalRor += r.deposits_ror_id || 0;
+                if (r.iso3_code) distinctCountries.add(r.iso3_code);
+            });
+
+            // Calculate overall percentage rates
+            const refRate = totalMembers > 0 ? (totalRef / totalMembers * 100) : 0;
+            const absRate = totalMembers > 0 ? (totalAbs / totalMembers * 100) : 0;
+            const orcidRate = totalMembers > 0 ? (totalOrcid / totalMembers * 100) : 0;
+            const rorRate = totalMembers > 0 ? (totalRor / totalMembers * 100) : 0;
+
+            // DOM Updates with animations
+            animateNumber('kpiMembers', totalMembers, true);
+            animateNumber('kpiCountriesCount', distinctCountries.size, false);
+
+            document.getElementById('kpiRefRate').innerText = `${refRate.toFixed(1)}%`;
+            document.getElementById('kpiRefProgress').style.width = `${Math.min(refRate, 100)}%`;
+
+            document.getElementById('kpiAbsRate').innerText = `${absRate.toFixed(1)}%`;
+            document.getElementById('kpiAbsProgress').style.width = `${Math.min(absRate, 100)}%`;
+
+            document.getElementById('kpiOrcidRate').innerText = `${orcidRate.toFixed(1)}%`;
+            document.getElementById('kpiOrcidProgress').style.width = `${Math.min(orcidRate, 100)}%`;
+
+            document.getElementById('kpiRorRate').innerText = `${rorRate.toFixed(1)}%`;
+            document.getElementById('kpiRorProgress').style.width = `${Math.min(rorRate, 100)}%`;
+        }
+
+        // Animate count widgets for polished feeling
+        function animateNumber(id, endValue, useLocale = false) {
+            const el = document.getElementById(id);
+            const duration = 800; // ms
+            const start = 0;
+            const startTime = performance.now();
+
+            function update(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Ease out function
+                const easeValue = start + (endValue - start) * (1 - Math.pow(1 - progress, 3));
+
+                el.innerText = useLocale
+                    ? Math.round(easeValue).toLocaleString()
+                    : Math.round(easeValue);
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                } else {
+                    el.innerText = useLocale ? endValue.toLocaleString() : endValue;
+                }
+            }
+            requestAnimationFrame(update);
+        }
+
+        // Render Historical trends over all dates
+        function renderTrendLineChart() {
+            // Aggregate totals by unique dates
+            const dateMap = {};
+            uniqueDates.forEach(d => {
+                dateMap[d] = { members: 0, ref: 0, abs: 0 };
+            });
+
+            rawCSVData.forEach(r => {
+                const d = r.current_up_to;
+                if (dateMap[d]) {
+                    dateMap[d].members += (r.total_members || 0);
+                    dateMap[d].ref += (r.deposits_ref || 0);
+                    dateMap[d].abs += (r.deposits_abstract || 0);
+                }
+            });
+
+            // Build arrays for Chart (sorted chronologically)
+            const sortedDates = [...uniqueDates].reverse(); // oldest first
+            const memberTrend = [];
+            const refTrend = [];
+            const absTrend = [];
+
+            sortedDates.forEach(d => {
+                const aggregate = dateMap[d];
+                memberTrend.push(aggregate.members);
+                refTrend.push(aggregate.members > 0 ? (aggregate.ref / aggregate.members * 100) : 0);
+                absTrend.push(aggregate.members > 0 ? (aggregate.abs / aggregate.members * 100) : 0);
+            });
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedDates.map(d => {
+                        // Format "2026-04-30" -> "Apr 2026"
+                        const p = d.split('-');
+                        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                        return monthNames[parseInt(p[1]) - 1] + " " + p[0];
+                    }),
+                    datasets: [
+                        {
+                            label: 'Total Members',
+                            data: memberTrend,
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.35,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Ref Deposit %',
+                            data: refTrend,
+                            borderColor: '#3b82f6',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: false,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: 'Abstract Deposit %',
+                            data: absTrend,
+                            borderColor: '#10b981',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: false,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: '#0f172a',
+                            titleColor: '#fff',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#334155',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        },
+                        y: {
+                            position: 'left',
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            title: { display: true, text: 'Members Count', color: '#6366f1', font: { size: 10, weight: 'bold' } }
+                        },
+                        y1: {
+                            position: 'right',
+                            grid: { drawOnChartArea: false }, // avoid grid lines overlapping
+                            ticks: { color: '#94a3b8', font: { size: 10 }, callback: value => value.toFixed(0) + '%' },
+                            title: { display: true, text: 'Deposit Rate (%)', color: '#10b981', font: { size: 10, weight: 'bold' } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Bar chart for the selected month (uses latest snapshot to avoid duplication)
+        function renderTopCountriesChart(data) {
+            const latestDate = uniqueDates[0];
+            const latestData = data.filter(r => r.current_up_to === latestDate);
+
+            // Sort countries by total members descending, take top 10
+            const sorted = [...latestData]
+                .sort((a, b) => (b.total_members || 0) - (a.total_members || 0))
+                .slice(0, 10);
+
+            const countryNames = sorted.map(r => getCountryName(r.iso3_code));
+            const memberCounts = sorted.map(r => r.total_members || 0);
+            const abstractCounts = sorted.map(r => r.deposits_abstract || 0);
+            const fundingCounts = sorted.map(r => r.acknowledges_funding || 0);
+
+            const ctx = document.getElementById('topCountriesChart').getContext('2d');
+            if (topCountriesChart) topCountriesChart.destroy();
+
+            // Create linear gradient for members bar background
+            const bgGradient = ctx.createLinearGradient(0, 0, 300, 0);
+            bgGradient.addColorStop(0, 'rgba(99, 102, 241, 0.95)');
+            bgGradient.addColorStop(1, 'rgba(168, 85, 247, 0.7)');
+
+            // Create linear gradient for abstracts bar background
+            const abstractGradient = ctx.createLinearGradient(0, 0, 300, 0);
+            abstractGradient.addColorStop(0, 'rgba(16, 185, 129, 0.95)');
+            abstractGradient.addColorStop(1, 'rgba(52, 211, 153, 0.7)');
+
+            // Create linear gradient for funding acks bar background (Bright Amber/Yellow gradient)
+            const fundingGradient = ctx.createLinearGradient(0, 0, 300, 0);
+            fundingGradient.addColorStop(0, 'rgba(251, 191, 36, 0.95)'); // Amber 400
+            fundingGradient.addColorStop(1, 'rgba(253, 224, 71, 0.95)'); // Yellow 300
+
+            topCountriesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: countryNames,
+                    datasets: [
+                        {
+                            label: 'Total Members',
+                            data: memberCounts,
+                            backgroundColor: bgGradient,
+                            borderWidth: 0,
+                            grouped: false, // overlap instead of side-by-side or stacked
+                            barThickness: 24,
+                            order: 3, // draw at the back
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Abstract Deposits',
+                            data: abstractCounts,
+                            backgroundColor: abstractGradient,
+                            borderWidth: 0,
+                            grouped: false, // overlap instead of side-by-side or stacked
+                            barThickness: 16,
+                            order: 2, // draw in the middle
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Funding Acknowledged',
+                            data: fundingCounts,
+                            backgroundColor: fundingGradient,
+                            borderWidth: 0,
+                            grouped: false, // overlap instead of side-by-side or stacked
+                            barThickness: 8,
+                            order: 1, // draw at the front
+                            borderRadius: 2
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y', // horizontal bar chart
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleColor: '#fff',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#334155',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: false,
+                            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 12 },
+                                callback: function (value) {
+                                    return (value / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) + 'K';
+                                }
+                            }
+                        },
+                        y: {
+                            stacked: false,
+                            grid: { display: false },
+                            ticks: { color: '#cbd5e1', font: { size: 12, weight: 'bold' } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Custom Cell formatters for Tabulator
+        function countryCellFormatter(cell) {
+            const iso3 = cell.getValue();
+            const flagUrl = getCountryFlagUrl(iso3);
+            const name = getCountryName(iso3);
+
+            return `
+                <div class="flex items-center gap-3">
+                    ${flagUrl ? `<img src="${flagUrl}" alt="${name} flag" class="w-5 h-3.5 rounded shadow-sm object-cover border border-slate-200/50" />` : `<div class="w-5 h-3.5 bg-slate-200 rounded border border-slate-350"></div>`}
+                    <div class="flex flex-col">
+                        <span class="font-bold text-slate-900">${name}</span>
+                        <span class="text-[10px] text-slate-650 uppercase tracking-wide font-medium bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 w-max">${iso3}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function numberCellFormatter(cell) {
+            const val = cell.getValue();
+            if (val === null || val === undefined || val === "" || val === "NA" || isNaN(Number(val))) {
+                return `<span class="text-slate-400 font-mono">-</span>`;
+            }
+            return `<span class="font-mono text-slate-800 font-medium">${Number(val).toLocaleString()}</span>`;
+        }
+
+        // Main Tabulator Table setup
+        function renderTabulatorTable(tableData) {
+            if (tabulatorTable) {
+                // Table already exists, just update data
+                tabulatorTable.setData(tableData);
+                return;
+            }
+
+            // Create columns list with all 23 CSV columns
+            const tableColumns = [
+                { title: "Reporting Date", field: "current_up_to", width: 140, hozAlign: "center", headerHozAlign: "center", sorter: "string" },
+                {
+                    title: "Region", field: "region_id", width: 100, headerHozAlign: "center", hozAlign: "center", sorter: "string",
+                    formatter: function (cell) {
+                        return `<span class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs px-2.5 py-0.5 rounded-full font-semibold">${cell.getValue()}</span>`;
+                    }
+                },
+                { title: "Country", field: "iso3_code", formatter: countryCellFormatter, width: 220, sorter: "string" },
+                { title: "Total Members", field: "total_members", width: 140, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: References", field: "deposits_ref", width: 165, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: Abstracts", field: "deposits_abstract", width: 160, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: License", field: "deposits_license", width: 155, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: Crossmark", field: "deposits_crossmark", width: 165, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: Updates", field: "deposits_updates", width: 155, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: Text Mining", field: "deposits_textmining", width: 170, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: Status Info", field: "deposits_status_info", width: 165, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Acks Funding", field: "acknowledges_funding", width: 145, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: Funder ID", field: "deposits_funder_id", width: 160, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: Grant ID", field: "deposits_grant_id", width: 155, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: ORCID", field: "deposits_orcid", width: 150, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "ORCID: Authors", field: "deposits_orcid_for_authors", width: 160, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "ORCID: Chairs", field: "deposits_orcid_for_chairs", width: 150, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "ORCID: Editors", field: "deposits_orcid_for_editors", width: 160, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "ORCID: Translators", field: "deposits_orcid_for_translators", width: 175, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "Deposits: ROR ID", field: "deposits_ror_id", width: 150, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "ROR: Affiliations", field: "deposits_ror_id_for_affiliations", width: 170, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "ROR: Funders", field: "deposits_ror_id_for_funders", width: 155, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" },
+                { title: "ROR: Institutions", field: "deposits_ror_id_for_institutions", width: 170, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number" }
+            ];
+
+            // Initialize new Tabulator Table with horizontal scroll layout
+            tabulatorTable = new Tabulator("#tabulatorTable", {
+                data: tableData,
+                layout: "fitDataFill",
+                pagination: "local",
+                paginationSize: 10,
+                paginationSizeSelector: false, // controlled by our custom selector
+                initialSort: [
+                    { column: "current_up_to", dir: "desc" },
+                    { column: "total_members", dir: "desc" }
+                ],
+                columns: tableColumns,
+                placeholder: "<div class='text-slate-500 text-sm py-8'>No countries match your search parameters.</div>"
+            });
+
+            // Set up listener for when the table is ready
+            tabulatorTable.on("tableBuilt", function () {
+                isTableInitialized = true;
+                applyTableFilters();
+            });
+        }
+
+        // Render second Metadata Tabulator Table dynamically
+        function renderMetadataTabulatorTable(tableData) {
+            if (metadataTabulatorTable) {
+                metadataTabulatorTable.setData(tableData);
+                return;
+            }
+
+            if (!tableData || tableData.length === 0) return;
+
+            // Explicit base columns
+            const baseCols = [
+                { title: "Reporting Date", field: "current_up_to", width: 140, hozAlign: "center", headerHozAlign: "center", sorter: "string" },
+                {
+                    title: "Region", field: "region_id", width: 100, headerHozAlign: "center", hozAlign: "center", sorter: "string",
+                    formatter: function (cell) {
+                        return `<span class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs px-2.5 py-0.5 rounded-full font-semibold">${cell.getValue()}</span>`;
+                    }
+                },
+                { title: "Country", field: "iso3_code", formatter: countryCellFormatter, width: 220, sorter: "string" },
+                {
+                    title: "Doc Type", field: "document_type", width: 150, sorter: "string",
+                    formatter: function (cell) {
+                        return `<span class="bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded text-xs border border-slate-200">${cell.getValue()}</span>`;
+                    }
+                },
+                { title: "Doc Subtype", field: "document_subtype", width: 150, sorter: "string" }
+            ];
+
+            // Exclude base cols from auto-generation
+            const excludeKeys = ["current_up_to", "region_id", "iso3_code", "document_type", "document_subtype"];
+
+            // Generate numeric columns automatically from data keys
+            const dataCols = Object.keys(tableData[0]).filter(k => !excludeKeys.includes(k)).map(key => {
+                const title = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                return {
+                    title: title, field: key, width: 165, hozAlign: "right", headerHozAlign: "right", formatter: numberCellFormatter, sorter: "number"
+                };
+            });
+
+            const metadataColumns = [...baseCols, ...dataCols];
+
+            // Initialize new Metadata Tabulator Table
+            metadataTabulatorTable = new Tabulator("#metadataTabulatorTable", {
+                data: tableData,
+                layout: "fitDataFill",
+                pagination: "local",
+                paginationSize: parseInt(document.getElementById('pageSizeSelect').value) || 10,
+                paginationSizeSelector: false,
+                initialSort: [
+                    { column: "current_up_to", dir: "desc" },
+                    { column: "n_dois", dir: "desc" }
+                ],
+                columns: metadataColumns,
+                placeholder: "<div class='text-slate-500 text-sm py-8'>No data matches your search parameters.</div>"
+            });
+
+            metadataTabulatorTable.on("tableBuilt", function () {
+                isMetadataTableInitialized = true;
+                applyTableFilters();
+            });
+        }
+
+        // Apply input search and region dropdown filter dynamically
+        function applyTableFilters() {
+            const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+
+            if (tabulatorTable && isTableInitialized) {
+                tabulatorTable.clearFilter();
+                if (searchQuery !== "") {
+                    tabulatorTable.setFilter(function (data) {
+                        const name = getCountryName(data.iso3_code).toLowerCase();
+                        const iso3 = (data.iso3_code || "").toLowerCase();
+                        const region = (data.region_id || "").toLowerCase();
+                        return name.includes(searchQuery) || iso3.includes(searchQuery) || region.includes(searchQuery);
+                    });
+                }
+            }
+
+            if (metadataTabulatorTable && isMetadataTableInitialized) {
+                metadataTabulatorTable.clearFilter();
+                if (searchQuery !== "") {
+                    metadataTabulatorTable.setFilter(function (data) {
+                        const name = getCountryName(data.iso3_code).toLowerCase();
+                        const iso3 = (data.iso3_code || "").toLowerCase();
+                        const region = (data.region_id || "").toLowerCase();
+                        const type = (data.document_type || "").toLowerCase();
+                        return name.includes(searchQuery) || iso3.includes(searchQuery) || region.includes(searchQuery) || type.includes(searchQuery);
+                    });
+                }
+            }
+        }
+
+        // Handle page sizing change
+        function handlePageSizeChange(e) {
+            const size = parseInt(e.target.value);
+            if (tabulatorTable) {
+                tabulatorTable.setPageSize(size);
+            }
+            if (metadataTabulatorTable) {
+                metadataTabulatorTable.setPageSize(size);
+            }
+        }
+
+        // Dynamic column toggle controller
+        function setupColumnToggles() {
+            const toggles = [
+                { id: 'colToggleRef', field: 'deposits_ref' },
+                { id: 'colToggleAbs', field: 'deposits_abstract' },
+                { id: 'colToggleOrcid', field: 'deposits_orcid' },
+                { id: 'colToggleRor', field: 'deposits_ror_id' },
+                { id: 'colToggleLicense', field: 'deposits_license' },
+                { id: 'colToggleFunding', field: 'acknowledges_funding' }
+            ];
+
+            toggles.forEach(t => {
+                document.getElementById(t.id).addEventListener('change', (e) => {
+                    if (tabulatorTable) {
+                        if (e.target.checked) {
+                            tabulatorTable.showColumn(t.field);
+                        } else {
+                            tabulatorTable.hideColumn(t.field);
+                        }
+                    }
+                });
+            });
+        }
+
+        // Download features (CSV / JSON / SVG)
+        function downloadCSV() {
+            if (tabulatorTable) {
+                const date = uniqueDates[0] || 'all';
+                const region = document.getElementById('regionSelect').value;
+                tabulatorTable.download("csv", `crossref_participation_${date}_${region}.csv`);
+            }
+        }
+
+        function downloadJSON() {
+            if (tabulatorTable) {
+                const date = uniqueDates[0] || 'all';
+                const region = document.getElementById('regionSelect').value;
+                tabulatorTable.download("json", `crossref_participation_${date}_${region}.json`);
+            }
+        }
+
+        function downloadChartSVG() {
+            const latestDate = uniqueDates[0] || 'N/A';
+            const region = document.getElementById('regionSelect').value;
+            const filteredData = getFilteredData();
+
+            // Get latest snapshot rows for the top 10 countries
+            const latestData = filteredData.filter(r => r.current_up_to === latestDate);
+            const sorted = [...latestData]
+                .sort((a, b) => (b.total_members || 0) - (a.total_members || 0))
+                .slice(0, 10);
+
+            const countryNames = sorted.map(r => getCountryName(r.iso3_code));
+            const memberCounts = sorted.map(r => r.total_members || 0);
+            const abstractCounts = sorted.map(r => r.deposits_abstract || 0);
+            const fundingCounts = sorted.map(r => r.acknowledges_funding || 0);
+
+            // Construct beautiful vector SVG
+            let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 680" width="950" height="680" style="background:#0b1329; font-family:'Inter', sans-serif;">`;
+
+            // Layout Boundaries (Reduce top margin to 50px since title is at bottom-right)
+            const margin = { top: 50, right: 60, bottom: 100, left: 220 };
+            const chartWidth = 950 - margin.left - margin.right;
+            const chartHeight = 680 - margin.top - margin.bottom;
+
+            // Title & Info placed at Bottom Right within the graph space (matching bottom-32 right-32 layout)
+            svg += `
+            <foreignObject x="${950 - margin.right - 460}" y="410" width="460" height="150">
+                <div xmlns="http://www.w3.org/1999/xhtml" style="color:#cbd5e1; font-size:16px; font-family:'Inter', sans-serif; text-align:left; font-weight:600; line-height:1.45;">
+                    Top 10 countries by number of members in the Crossref data as on April 2026. Inner bars show number of <span style="color:#a855f7;">members</span> that have deposited at least one work with an <span style="color:#10b981;">abstract</span> and with <span style="color:#fbbf24;">funding</span> metadata.
+                </div>
+            </foreignObject>
+            `;
+
+            // Calculate max value (which is maximum of total members) for X scaling
+            const maxVal = Math.max(...memberCounts, 1000);
+
+            const rowHeight = chartHeight / 10;
+
+            // Grid Lines & Ticks (vertical grid lines)
+            const gridTicks = 5;
+            for (let k = 0; k <= gridTicks; k++) {
+                const x = margin.left + (k / gridTicks) * chartWidth;
+                const gridVal = Math.round((k / gridTicks) * maxVal);
+                svg += `<line x1="${x}" y1="${margin.top - 10}" x2="${x}" y2="${680 - margin.bottom}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4"/>`;
+                svg += `<text x="${x}" y="${680 - margin.bottom + 20}" fill="#64748b" font-size="11" text-anchor="middle">${(gridVal / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K</text>`;
+            }
+
+            // Draw data rows
+            for (let i = 0; i < sorted.length; i++) {
+                const y = margin.top + i * rowHeight;
+                const midY = y + rowHeight / 2;
+
+                // Country Name Label
+                svg += `<text x="${margin.left - 20}" y="${midY + 5}" fill="#e2e8f0" font-size="12" font-weight="bold" text-anchor="end">${countryNames[i]}</text>`;
+
+                // Width calculations (absolute distances from 0 baseline)
+                const w1 = (memberCounts[i] / maxVal) * chartWidth;
+                const w2 = (abstractCounts[i] / maxVal) * chartWidth;
+                const w3 = (fundingCounts[i] / maxVal) * chartWidth;
+
+                // Draw horizontal layered overlapping bars (widest at bottom, thinnest on top)
+                svg += `<rect x="${margin.left}" y="${midY - 12}" width="${w1}" height="24" fill="#a855f7" rx="6"/>`;
+                svg += `<rect x="${margin.left}" y="${midY - 8}" width="${w2}" height="16" fill="#10b981" rx="4"/>`;
+                svg += `<rect x="${margin.left}" y="${midY - 4}" width="${w3}" height="8" fill="#facc15" rx="2"/>`;
+            }
+
+            // X Axis Line
+            svg += `<line x1="${margin.left}" y1="${680 - margin.bottom}" x2="${950 - margin.right}" y2="${680 - margin.bottom}" stroke="rgba(255,255,255,0.2)"/>`;
+
+
+
+            svg += `</svg>`;
+
+            // Download file
+            const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `top_countries_chart_${latestDate}.svg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadChartPNG() {
+            const canvas = document.getElementById('topCountriesChart');
+            const latestDate = uniqueDates[0] || 'N/A';
+            const region = document.getElementById('regionSelect').value;
+
+            // Draw onto temp canvas matching the original canvas height (no top headroom)
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Draw slate-card dark background
+            tempCtx.fillStyle = '#0b1329';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // Draw chart on top at (0,0)
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // Draw title text in bottom-right (matching bottom-32 right-32 layout)
+            tempCtx.fillStyle = '#cbd5e1';
+            tempCtx.textAlign = 'left';
+            tempCtx.font = "600 16px 'Plus Jakarta Sans', 'Inter', sans-serif";
+            const fullTitle = 'Top 10 countries by number of members in the Crossref data as on April 2026. Inner bars show number of members that have deposited at least one work with an abstract and with funding metadata.';
+
+            // Local wrapping function with inline coloring matching bar datasets
+            // Local wrapping function with inline coloring matching bar datasets
+            function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+                const words = text.split(' ');
+                let currentX = x;
+                let currentY = y;
+                let membersCount = 0;
+                for (let n = 0; n < words.length; n++) {
+                    let word = words[n];
+                    let cleanWord = word.toLowerCase().replace(/[,.]/g, '');
+                    let wordWithSpace = word + ' ';
+                    let wordWidth = ctx.measureText(wordWithSpace).width;
+
+                    // Helper to resolve solid fillStyle dynamically
+                    function setWordStyle(cleanW) {
+                        if (cleanW === 'members') {
+                            membersCount++;
+                            ctx.fillStyle = membersCount === 2 ? '#a855f7' : '#cbd5e1';
+                        } else if (cleanW === 'abstract') {
+                            ctx.fillStyle = '#10b981';
+                        } else if (cleanW === 'funding') {
+                            ctx.fillStyle = '#fbbf24';
+                        } else {
+                            ctx.fillStyle = '#cbd5e1';
+                        }
+                    }
+
+                    if (currentX + wordWidth - x > maxWidth && n > 0) {
+                        currentX = x;
+                        currentY += lineHeight;
+                    }
+
+                    setWordStyle(cleanWord);
+                    ctx.fillText(wordWithSpace, currentX, currentY);
+                    currentX += wordWidth;
+                }
+            }
+            drawWrappedText(tempCtx, fullTitle, tempCanvas.width - 520, tempCanvas.height - 140, 460, 22);
+
+            // Export and download
+            const url = tempCanvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `top_countries_chart_${latestDate}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
