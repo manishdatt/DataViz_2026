@@ -1,0 +1,714 @@
+---
+title: Sustainable Energy for All
+author: Manish Datt
+date: '2026-05-26'
+description: Top 10 countries by total primary energy supply and their energy savings.
+image: Sustainable_Energy.png
+categories:
+- Apache ECharts
+- TidyTuesday
+layout: false
+slug: 2654
+---
+
+<h2 class="text-2xl lg:text-3xl m-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Global Energy Analytics Dashboard</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts (Plus Jakarta Sans) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Tabulator CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5.6.0/dist/css/tabulator.min.css" rel="stylesheet">
+  <link href="styles.css" rel="stylesheet">
+
+  <!-- Tabulator, PapaParse, and ECharts JS -->
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5.6.0/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f8fafc;
+    }
+
+    /* Smooth scrollbar for custom styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Custom shadow and card styling */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(241, 245, 249, 1);
+    }
+  </style>
+</head>
+
+<body class="min-h-screen p-4 md:p-8 text-slate-800">
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Sleek Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div>
+        <div class="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-wider mb-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          Interactive Analytics
+        </div>
+        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Global Energy Supply Explorer</h1>
+        <p class="text-slate-500 text-sm mt-1">Analyze and compare primary energy supply data across countries and
+          years.</p>
+      </div>
+
+      <!-- Status Badge -->
+      <div id="status-container" class="flex items-center gap-3">
+        <span id="status-dot" class="w-3 h-3 bg-amber-500 rounded-full animate-ping"></span>
+        <span id="status"
+          class="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+          Loading energy dataset...
+        </span>
+      </div>
+    </header>
+
+    <!-- Top Visual Section (Chart + Summary Cards) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Left ECharts Column (occupies 2/3 on desktop) -->
+      <div
+        class="lg:col-span-2 glass-card bg-white rounded-2xl shadow-sm p-4 md:p-6 transition-all duration-300 hover:shadow-md">
+        <!-- Chart container -->
+        <div id="chart-container" class="relative w-full h-[450px]">
+          <!-- Loader indicator inside chart -->
+          <div id="chart-loader" class="absolute inset-0 flex items-center justify-center bg-white/70 z-10">
+            <div class="flex flex-col items-center gap-2">
+              <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+              <span class="text-xs text-slate-500 font-medium">Generating visual...</span>
+            </div>
+          </div>
+          <div id="chart" class="w-full h-full"></div>
+        </div>
+      </div>
+
+      <!-- Right Column: Interactive Select & Stats (occupies 1/3 on desktop) -->
+      <div class="flex flex-col gap-6">
+
+        <!-- Controls Card -->
+        <div
+          class="glass-card bg-white rounded-2xl shadow-sm p-6 border-l-4 border-indigo-500 transition-all duration-300 hover:shadow-md">
+          <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+              </path>
+            </svg>
+            Dashboard Controls
+          </h2>
+
+          <div class="space-y-4">
+            <div>
+              <label for="year-select"
+                class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Select Year</label>
+              <div class="relative">
+                <select id="year-select" disabled
+                  class="w-full pl-3 pr-10 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 font-semibold rounded-xl appearance-none cursor-pointer transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                  <option>Loading...</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-100">
+              <button id="download-svg-btn" disabled
+                class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-semibold rounded-xl border border-indigo-100 hover:border-indigo-200 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export as SVG
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stat Card 1: Top Country -->
+        <div
+          class="glass-card bg-white rounded-2xl shadow-sm p-6 relative overflow-hidden transition-all duration-300 hover:shadow-md">
+          <!-- Background decoration -->
+          <div class="absolute -right-4 -bottom-4 text-indigo-50/70 w-24 h-24 pointer-events-none">
+            <svg fill="currentColor" viewBox="0 0 24 24" class="w-full h-full">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+          </div>
+
+          <span class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Top Energy
+            Supplier</span>
+          <h3 id="stat-top-val" class="text-3xl font-extrabold text-slate-900 tracking-tight">---</h3>
+          <span id="stat-top-country"
+            class="inline-block text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md mt-2">
+            Loading...
+          </span>
+        </div>
+
+        <!-- Stat Card 2: Average of Top 10 -->
+        <div
+          class="glass-card bg-white rounded-2xl shadow-sm p-6 relative overflow-hidden transition-all duration-300 hover:shadow-md">
+          <!-- Background decoration -->
+          <div class="absolute -right-4 -bottom-4 text-teal-50/70 w-24 h-24 pointer-events-none">
+            <svg fill="currentColor" viewBox="0 0 24 24" class="w-full h-full">
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+          </div>
+
+          <span class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Top 10 Average</span>
+          <h3 id="stat-avg-val" class="text-3xl font-extrabold text-slate-900 tracking-tight">---</h3>
+          <span class="inline-block text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md mt-2">
+            Supply per leading country
+          </span>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Data Table Section -->
+    <div class="glass-card bg-white rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+      <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-800">Comprehensive Energy Dataset</h2>
+          <p class="text-xs text-slate-400 mt-0.5">Filter, sort, and paginate through all records in the table.</p>
+        </div>
+
+        <!-- Quick search note -->
+        <div
+          class="text-xs text-slate-500 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Use column header inputs to search/filter rows
+        </div>
+      </div>
+
+      <!-- Table Element Wrapper -->
+      <div class="p-6">
+        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-inner">
+          <div id="table" class="min-w-full"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const CSV_URL = "./energy.csv";
+
+    // List of regional and income aggregates in country_code to filter out
+    const blacklist = [
+      'GCA', 'GEJ', 'GEA', 'GEE', 'GEU', 'HIC', 'NOC', 'OEC',
+      'GLC', 'LMY', 'LIC', 'LMC', 'MIC', 'GNF', 'GNA', 'GCN',
+      'GOC', 'GSE', 'GSA', 'GSS', 'UMC', 'GWA', 'GWL'
+    ];
+
+    // Helper functions for formatting
+    function formatTerajoules(num) {
+      if (num === null || num === undefined || isNaN(num)) return 'N/A';
+      if (num >= 1e6) {
+        return (num / 1e6).toFixed(2) + ' M TJ';
+      } else if (num >= 1e3) {
+        return (num / 1e3).toFixed(2) + ' K TJ';
+      }
+      return num.toFixed(2) + ' TJ';
+    }
+
+    // Sanitize + normalize ECharts SVG output for Inkscape / vector editors
+    function sanitizeSvgForEditor(svgString) {
+      // 1. Clean root <svg> tag: add viewBox and remove browser-only junk
+      svgString = svgString.replace(/<svg([^>]*?)>/, (match, attrs) => {
+        if (/\bviewBox\s*=/.test(attrs)) return match;
+
+        const w = (attrs.match(/width=["']?([\d.]+)/) || [])[1] || '800';
+        const h = (attrs.match(/height=["']?([\d.]+)/) || [])[1] || '600';
+
+        const clean = attrs
+          .replace(/\s*style\s*=\s*["'][^"']*["']/gi, '')
+          .replace(/\s*baseProfile\s*=\s*["']full["']/gi, '');
+
+        return `<svg${clean} viewBox="0 0 ${w} ${h}">`;
+      });
+
+      // 2. Move <defs> block to immediately after the opening <svg> tag.
+      //    ECharts sometimes appends it at the very end → browsers forgive it, Inkscape does not.
+      const defsMatch = svgString.match(/<defs\b[^>]*>[\s\S]*?<\/defs>/i);
+      if (defsMatch) {
+        const defsBlock = defsMatch[0];
+        svgString = svgString.replace(defsBlock, '');                    // remove from original location
+        svgString = svgString.replace(/(<svg[^>]*>)/, '$1' + defsBlock); // insert right after <svg>
+      }
+
+      // 3. Remove all filter="..." attributes from elements.
+      //    The drop-shadow filters ECharts generates (from shadowBlur/shadowColor) are
+      //    a very common cause of elements becoming invisible in Inkscape even when
+      //    the fill is correctly detected in the Fill & Stroke panel.
+      svgString = svgString.replace(/\s*filter\s*=\s*["'][^"']*["']/gi, '');
+
+      // 4. (Optional cleanup) Remove the now-unused <filter> definitions from <defs>
+      //    so the file is smaller and has no dead filter references.
+      svgString = svgString.replace(/<filter\b[^>]*>[\s\S]*?<\/filter>/gi, '');
+
+      return svgString.trim();
+    }
+
+    // Robustly convert ECharts getDataURL result to plain SVG text
+    function dataUrlToSvgText(dataUrl) {
+      if (!dataUrl || typeof dataUrl !== 'string') return '';
+      if (!dataUrl.startsWith('data:image/svg+xml')) {
+        // Already plain SVG text (rare)
+        return dataUrl;
+      }
+      const base64Marker = ';base64,';
+      if (dataUrl.includes(base64Marker)) {
+        const base64 = dataUrl.split(base64Marker)[1];
+        try {
+          const binary = atob(base64);
+          const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+          return new TextDecoder('utf-8').decode(bytes);
+        } catch (e) {
+          console.warn('SVG base64 decode failed, falling back', e);
+          return atob(base64); // last resort
+        }
+      } else {
+        // plain URL-encoded (no base64)
+        return decodeURIComponent(dataUrl.split(',')[1] || '');
+      }
+    }
+
+    // Initialize ECharts chart (using SVG renderer for high-quality vectors & export capability)
+    const chartEl = document.getElementById('chart');
+    window.chartInstance = echarts.init(chartEl, null, { renderer: 'svg' });
+
+    // Main logic for parsing and rendering
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: true,
+      complete: function (results) {
+        const data = results.data;
+        const headers = results.meta.fields;
+
+        // Save to global window for accessibility
+        window.energyData = data;
+
+        // 1. Set Status Dot and text
+        const statusDot = document.getElementById('status-dot');
+        statusDot.className = "w-3 h-3 bg-emerald-500 rounded-full";
+        statusDot.classList.remove('animate-ping');
+        document.getElementById('status').textContent =
+          `Loaded ${data.length.toLocaleString()} rows × ${headers.length} columns`;
+
+        // 2. Populate Years Selector
+        const years = Array.from(new Set(data.map(d => d.yr)))
+          .filter(y => y !== null && !isNaN(y))
+          .sort((a, b) => b - a); // newest year first
+
+        const yearSelect = document.getElementById('year-select');
+        yearSelect.innerHTML = '';
+        years.forEach(yr => {
+          const opt = document.createElement('option');
+          opt.value = yr;
+          opt.textContent = yr;
+          if (yr == 2010) opt.selected = true;
+          yearSelect.appendChild(opt);
+        });
+        yearSelect.disabled = false;
+
+        // Hide chart loader
+        document.getElementById('chart-loader').style.display = 'none';
+
+        // 3. Initialize/Render ECharts default year (2010)
+        updateDashboard(2010);
+
+        // 4. Set Year Change Event Listener
+        yearSelect.addEventListener('change', (e) => {
+          updateDashboard(Number(e.target.value));
+        });
+
+        // Enable and configure SVG download button (clean Inkscape-friendly SVG)
+        const downloadBtn = document.getElementById('download-svg-btn');
+        downloadBtn.disabled = false;
+        downloadBtn.addEventListener('click', () => {
+          const activeYear = document.getElementById('year-select').value;
+
+          if (!window.chartInstance) {
+            alert('Chart not ready yet.');
+            return;
+          }
+
+          // Use ECharts native SVG export (much cleaner than DOM serialization)
+          const dataUrl = window.chartInstance.getDataURL({
+            type: 'svg',
+            backgroundColor: '#ffffff'
+          });
+
+          let svgString = dataUrlToSvgText(dataUrl);
+
+          if (!svgString || !svgString.trim().startsWith('<svg')) {
+            alert('Failed to generate valid SVG. Try again after the chart finishes rendering.');
+            return;
+          }
+
+          // Normalize for Inkscape: viewBox + move <defs> to top (ECharts often puts it at the end)
+          svgString = sanitizeSvgForEditor(svgString);
+
+          if (!svgString.trim().startsWith('<svg')) {
+            alert('SVG sanitization failed. The exported file would be invalid.');
+            return;
+          }
+
+          const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `energy_supply_vs_savings_${activeYear}.svg`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        });
+
+        // 5. Initialize and Render Tabulator Table
+        const tableEl = document.getElementById('table');
+        new Tabulator(tableEl, {
+          data: data,
+          layout: 'fitDataFill',
+          columns: headers.map(h => {
+            // Check if column values are numbers
+            const isNum = data.length > 0 && typeof data[0][h] === 'number';
+            return {
+              title: h.replace(/_/g, ' ').toUpperCase(),
+              field: h,
+              headerFilter: 'input',
+              sorter: isNum ? 'number' : 'string',
+              frozen: h === 'country_name',
+              formatter: function (cell) {
+                const val = cell.getValue();
+                if (val === 'NA' || val === null || val === undefined) return '<span class="text-slate-400 italic">NA</span>';
+                if (isNum && h !== 'yr' && h !== 'country_code') {
+                  return typeof val === 'number' ? val.toLocaleString(undefined, { maximumFractionDigits: 2 }) : val;
+                }
+                return val;
+              }
+            };
+          }),
+          pagination: 'local',
+          paginationSize: 20,
+          paginationSizeSelector: [10, 20, 50, 100],
+        });
+
+        // Handle window resize for ECharts
+        window.addEventListener('resize', () => {
+          window.chartInstance.resize();
+        });
+      },
+      error: function (err) {
+        document.getElementById('status-dot').className = "w-3 h-3 bg-rose-500 rounded-full";
+        document.getElementById('status').textContent = `Error: ${err.message}`;
+      },
+    });
+
+    // Update ECharts chart and Stats Cards dynamically
+    const updateDashboard = (year) => {
+      // Filter data for specified year, exclude blacklist, check numeric total primary energy supply
+      const yearData = window.energyData.filter(d =>
+        d.yr == year &&
+        d.total_primary_energy_supply_terajoules !== null &&
+        d.total_primary_energy_supply_terajoules !== 'NA' &&
+        !isNaN(Number(d.total_primary_energy_supply_terajoules)) &&
+        !blacklist.includes(d.country_code)
+      );
+
+      // Sort descending
+      yearData.sort((a, b) => b.total_primary_energy_supply_terajoules - a.total_primary_energy_supply_terajoules);
+
+      // Take top 10
+      const top10 = yearData.slice(0, 10);
+
+      // Update Stats Card values
+      if (top10.length > 0) {
+        const top1Val = top10[0].total_primary_energy_supply_terajoules;
+        const top1Name = top10[0].country_name;
+        document.getElementById('stat-top-val').textContent = formatTerajoules(top1Val);
+        document.getElementById('stat-top-country').textContent = `Leading: ${top1Name}`;
+
+        const sumVal = top10.reduce((acc, curr) => acc + curr.total_primary_energy_supply_terajoules, 0);
+        const avgVal = sumVal / top10.length;
+        document.getElementById('stat-avg-val').textContent = formatTerajoules(avgVal);
+      } else {
+        document.getElementById('stat-top-val').textContent = 'N/A';
+        document.getElementById('stat-top-country').textContent = 'No data';
+        document.getElementById('stat-avg-val').textContent = 'N/A';
+      }
+
+      // ECharts expects categories in reversed order for a horizontal bar chart so largest is at the top
+      const countries = top10.map(d => d.country_name).reverse();
+      const primaryValues = top10.map(d => d.total_primary_energy_supply_terajoules).reverse();
+      const savingsValues = top10.map(d => {
+        const val = d.energy_savings_primary_energy_terajoules;
+        return (val === null || val === undefined || val === 'NA' || isNaN(Number(val))) ? 0 : Number(val);
+      }).reverse();
+
+      const option = {
+        title: {
+          text: `Primary Supply vs. Energy Savings (${year})`,
+          textStyle: {
+            fontSize: 18,
+            fontWeight: '700',
+            fontFamily: 'Plus Jakarta Sans',
+            color: '#0f172a'
+          },
+          subtext: 'Top 10 Countries by Total Primary Energy Supply',
+          subtextStyle: {
+            fontSize: 13,
+            fontFamily: 'Plus Jakarta Sans',
+            color: '#64748b'
+          },
+          left: 5,
+          top: 5
+        },
+        legend: {
+          data: ['Primary Energy Supply', 'Energy Savings'],
+          right: 10,
+          top: 15,
+          textStyle: {
+            fontFamily: 'Plus Jakarta Sans',
+            color: '#475569',
+            fontSize: 13,
+            fontWeight: '600'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          },
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderColor: '#e2e8f0',
+          borderWidth: 1,
+          textStyle: {
+            color: '#0f172a',
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 13
+          },
+          formatter: function (params) {
+            const countryName = params[0].name;
+            const primaryVal = params[0] ? params[0].value : 0;
+            const savingsVal = params[1] ? params[1].value : 0;
+
+            // Get index in sorted list
+            const index = top10.findIndex(d => d.country_name === countryName);
+            const rank = index !== -1 ? index + 1 : '';
+
+            // Calculate percentage share (savings relative to supply)
+            const pct = primaryVal > 0 ? ((savingsVal / primaryVal) * 100).toFixed(1) + '%' : '0.0%';
+
+            return `
+              <div style="font-weight: 700; margin-bottom: 6px; color: #0f172a; font-size: 13px;">#${rank} ${countryName}</div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; justify-content: space-between; gap: 24px;">
+                  <span style="color: #64748b; font-size: 12px;">Primary Supply:</span>
+                  <span style="font-weight: 600; color: #4f46e5; font-size: 12px;">${new Intl.NumberFormat('en-US').format(Math.round(primaryVal))} TJ</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; gap: 24px;">
+                  <span style="color: #64748b; font-size: 12px;">Energy Savings:</span>
+                  <span style="font-weight: 600; color: #f97316; font-size: 12px;">${new Intl.NumberFormat('en-US').format(Math.round(savingsVal))} TJ</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; gap: 24px; border-top: 1px solid #f1f5f9; padding-top: 4px; margin-top: 4px;">
+                  <span style="color: #64748b; font-size: 12px; font-weight: 500;">Savings Ratio:</span>
+                  <span style="font-weight: 700; color: #ea580c; font-size: 12px;">${pct}</span>
+                </div>
+              </div>
+            `;
+          }
+        },
+        grid: {
+          left: '3%',
+          right: '8%',
+          bottom: '8%',
+          top: '24%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'value',
+          min: -5000000,
+          name: 'Terajoules (TJ)',
+          nameLocation: 'middle',
+          nameGap: 25,
+          nameTextStyle: {
+            color: '#475569',
+            fontSize: 13,
+            fontFamily: 'Plus Jakarta Sans',
+            fontWeight: '600'
+          },
+          splitLine: {
+            lineStyle: {
+              type: 'dashed',
+              color: '#f1f5f9'
+            }
+          },
+          axisLabel: {
+            color: '#475569',
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 12,
+            formatter: function (value) {
+              return (value / 1e6).toFixed(0) + 'M';
+            }
+          }
+        },
+        yAxis: {
+          type: 'category',
+          data: countries,
+          axisLine: {
+            lineStyle: {
+              color: '#cbd5e1'
+            }
+          },
+          axisTick: {
+            show: false
+          },
+          axisLabel: {
+            color: '#0f172a',
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 13,
+            fontWeight: '500'
+          }
+        },
+        series: [
+          {
+            name: 'Primary Energy Supply',
+            type: 'bar',
+            data: primaryValues,
+            barWidth: '35%',
+            itemStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#4f46e5' }, // Indigo-600
+                { offset: 1, color: '#3b82f6' }  // Blue-500
+              ]),
+              borderRadius: [0, 6, 6, 0],
+              shadowColor: 'rgba(79, 70, 229, 0.1)',
+              shadowBlur: 10
+            },
+            emphasis: {
+              itemStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                  { offset: 0, color: '#4338ca' }, // Indigo-700
+                  { offset: 1, color: '#2563eb' }  // Blue-600
+                ])
+              }
+            },
+            label: {
+              show: true,
+              position: 'right',
+              formatter: function (params) {
+                return (params.value / 1e6).toFixed(2) + ' M';
+              },
+              color: '#4f46e5',
+              fontSize: 12,
+              fontFamily: 'Plus Jakarta Sans',
+              fontWeight: '600',
+              distance: 8
+            }
+          },
+          {
+            name: 'Energy Savings',
+            type: 'bar',
+            data: savingsValues,
+            barWidth: '35%',
+            barGap: '15%',
+            itemStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#f97316' }, // Orange-500
+                { offset: 1, color: '#f59e0b' }  // Amber-500
+              ]),
+              borderRadius: [0, 6, 6, 0],
+              shadowColor: 'rgba(249, 115, 22, 0.1)',
+              shadowBlur: 10
+            },
+            emphasis: {
+              itemStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                  { offset: 0, color: '#ea580c' }, // Orange-600
+                  { offset: 1, color: '#d97706' }  // Amber-600
+                ])
+              }
+            },
+            label: {
+              show: true,
+              position: 'right',
+              formatter: function (params) {
+                return (params.value / 1e6).toFixed(2) + ' M';
+              },
+              color: '#ea580c',
+              fontSize: 12,
+              fontFamily: 'Plus Jakarta Sans',
+              fontWeight: '600',
+              distance: 8
+            }
+          }
+        ]
+      };
+
+      window.chartInstance.setOption(option);
+    };
+  </script>
+</body>
+
+</html>
