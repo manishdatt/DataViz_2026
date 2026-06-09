@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPLP Data Table</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' fill='%23000'>📊</text></svg>">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    
+    <!-- jQuery (required by DataTables) -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <style>
+        table.dataTable tbody td {
+            padding: 1px 1px !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto py-8 px-4">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">EPLP Data Table</h1>
+            <p class="text-gray-600 mb-6">Interactive data table with pagination, sorting, and filtering</p>
+            
+            <div style="overflow-x: auto;">
+                <table id="data-table" class="stripe hover" style="width:100%">
+                    <thead>
+                        <tr id="headerRow"></tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            // Fetch and parse CSV
+            fetch('eplp.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to fetch CSV');
+                    return response.text();
+                })
+                .then(csvText => {
+                    Papa.parse(csvText, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            if (results.data && results.data.length > 0) {
+                                const columns = Object.keys(results.data[0]).map(key => ({
+                                    title: key.replace(/_/g, ' ').toUpperCase(),
+                                    data: key
+                                }));
+                                
+                                // Initialize DataTable
+                                $('#data-table').DataTable({
+                                    data: results.data,
+                                    columns: columns,
+                                    pageLength: 10,
+                                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                                    processing: true,
+                                    serverSide: false,
+                                    responsive: true,
+                                    order: [[0, 'asc'], [1, 'asc']],
+                                    language: {
+                                        search: "Search:",
+                                        lengthMenu: "Show _MENU_ entries per page",
+                                        info: "Showing _START_ to _END_ of _TOTAL_ entries"
+                                    }
+                                });
+                            } else {
+                                showError('No data found in CSV');
+                            }
+                        },
+                        error: function(error) {
+                            console.error("CSV Parse Error:", error);
+                            showError('Error parsing CSV: ' + error.message);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error("Fetch Error:", error);
+                    showError('Error loading CSV file: ' + error.message);
+                });
+
+            function showError(message) {
+                $('#data-table').html('<tr><td class="p-4 text-red-600">' + message + '</td></tr>');
+            }
+        });
+    </script>
+</body>
+</html>

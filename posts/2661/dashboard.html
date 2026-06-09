@@ -1,0 +1,1421 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPLP Pulse · Global Parental Leave Intelligence</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80' fill='%237c3aed'>📊</text></svg>">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        display: ['Space Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --border: #e2e8f0;
+            --accent: #7c3aed;
+            --accent-2: #06b6d4;
+            --accent-3: #ec4899;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0a0a1a;
+            --bg-secondary: #12122a;
+            --bg-tertiary: #1a1a3a;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: rgba(255, 255, 255, 0.08);
+            --accent: #a78bfa;
+            --accent-2: #22d3ee;
+            --accent-3: #f472b6;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        /* Animated background blobs */
+        .bg-blobs {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.35;
+            animation: float 20s ease-in-out infinite;
+        }
+        [data-theme="dark"] .blob { opacity: 0.25; }
+        .blob-1 { width: 500px; height: 500px; background: #7c3aed; top: -100px; left: -100px; }
+        .blob-2 { width: 400px; height: 400px; background: #06b6d4; top: 40%; right: -100px; animation-delay: -7s; }
+        .blob-3 { width: 450px; height: 450px; background: #ec4899; bottom: -100px; left: 30%; animation-delay: -14s; }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(50px, -50px) scale(1.1); }
+            66% { transform: translate(-30px, 40px) scale(0.95); }
+        }
+
+        /* Glass cards */
+        .glass {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+            transition: all 0.3s ease;
+        }
+        [data-theme="dark"] .glass {
+            background: rgba(18, 18, 42, 0.6);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .glass:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(124, 58, 237, 0.15);
+        }
+
+        /* KPI cards */
+        .kpi-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 20px;
+            padding: 24px;
+            color: white;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, var(--grad-from), var(--grad-to));
+            z-index: 0;
+        }
+        .kpi-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 100% 0%, rgba(255,255,255,0.2), transparent 60%);
+            z-index: 1;
+        }
+        .kpi-card > * { position: relative; z-index: 2; }
+        .kpi-card:hover { transform: translateY(-4px) scale(1.02); }
+
+        .kpi-1 { --grad-from: #667eea; --grad-to: #764ba2; }
+        .kpi-2 { --grad-from: #06b6d4; --grad-to: #0891b2; }
+        .kpi-3 { --grad-from: #f472b6; --grad-to: #db2777; }
+        .kpi-4 { --grad-from: #fbbf24; --grad-to: #f59e0b; }
+        .kpi-5 { --grad-from: #10b981; --grad-to: #059669; }
+        .kpi-6 { --grad-from: #ef4444; --grad-to: #be123c; }
+
+        .kpi-icon {
+            width: 48px; height: 48px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(10px);
+        }
+
+        .kpi-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1;
+        }
+        .kpi-label {
+            font-size: 13px;
+            opacity: 0.9;
+            font-weight: 500;
+            margin-top: 6px;
+        }
+        .kpi-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            margin-top: 12px;
+            padding: 4px 10px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .kpi-spark { height: 50px; margin-top: 16px; }
+
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        [data-theme="dark"] .header {
+            background: rgba(10, 10, 26, 0.7);
+        }
+
+        .brand-logo {
+            width: 44px; height: 44px;
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+        }
+
+        /* Hero */
+        .hero {
+            position: relative;
+            padding: 60px 20px 40px;
+            text-align: center;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(236, 72, 153, 0.1));
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #a78bfa;
+            margin-bottom: 24px;
+        }
+        .pulse-dot {
+            width: 8px; height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            50% { opacity: 0.7; transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+        }
+        .hero h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(36px, 6vw, 64px);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.05;
+            background: linear-gradient(135deg, #7c3aed 0%, #ec4899 50%, #06b6d4 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+        .hero p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Filter */
+        .filter-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+        .filter-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        select, input[type="text"], input[type="range"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #7c3aed;
+            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
+        }
+
+        /* Custom multi-select chip selector */
+        .chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 8px;
+            min-height: 50px;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .chip:hover { border-color: #7c3aed; }
+        .chip.active {
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }
+
+        /* Chart containers */
+        .chart-card {
+            border-radius: 20px;
+            padding: 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .chart-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(124, 58, 237, 0.12);
+        }
+        .chart-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .chart-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chart-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        .chart-icon-pill {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+        }
+        .chart-tag {
+            font-size: 11px;
+            padding: 4px 10px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .chart-body { width: 100%; height: 340px; }
+        .chart-body.tall { height: 420px; }
+        .chart-body.short { height: 260px; }
+
+        /* Tabs */
+        .tab-bar {
+            display: flex;
+            gap: 8px;
+            padding: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 14px;
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.25s;
+            background: transparent;
+            border: none;
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active {
+            background: var(--bg-secondary);
+            color: var(--accent);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Theme toggle */
+        .theme-toggle {
+            position: relative;
+            width: 56px; height: 30px;
+            background: var(--bg-tertiary);
+            border-radius: 15px;
+            cursor: pointer;
+            transition: background 0.3s;
+            border: 1px solid var(--border);
+        }
+        .theme-toggle::before {
+            content: '☀️';
+            position: absolute;
+            top: 50%; left: 4px;
+            transform: translateY(-50%);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        [data-theme="dark"] .theme-toggle::before {
+            content: '🌙';
+            left: 32px;
+        }
+        .theme-toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px; left: 3px;
+            width: 22px; height: 22px;
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            border-radius: 50%;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        [data-theme="dark"] .theme-toggle::after { left: 31px; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            border-radius: 5px;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .flag {
+            display: inline-block;
+            width: 24px; height: 16px;
+            border-radius: 3px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-3));
+            text-align: center;
+            line-height: 16px;
+            font-size: 9px;
+            font-weight: 700;
+            color: white;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .data-table th, .data-table td { padding: 12px 16px; text-align: left; font-size: 13px; }
+        .data-table th { font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; border-bottom: 1px solid var(--border); }
+        .data-table td { border-bottom: 1px solid var(--border); }
+        .data-table tr:hover td { background: var(--bg-tertiary); }
+        .tab-panel.hidden { display: none; }
+        footer { padding: 40px 20px; text-align: center; color: var(--text-secondary); font-size: 13px; }
+        footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="bg-blobs">
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+</div>
+<header class="header">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="brand-logo">📊</div>
+<div>
+<div class="font-display font-bold text-lg" style="color: var(--text-primary);">EPLP Pulse</div>
+<div class="text-xs" style="color: var(--text-secondary);">Global Parental Leave Intelligence</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center gap-2 text-xs" style="color: var(--text-secondary);">
+<div class="pulse-dot"></div><span>Live data</span>
+</div>
+<button id="exportBtn" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: linear-gradient(135deg, #7c3aed, #ec4899); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">📥 Export PNG</button>
+<div class="theme-toggle" id="themeToggle" title="Toggle theme"></div>
+</div>
+</div>
+</header>
+<section class="hero">
+<div class="hero-badge"><div class="pulse-dot"></div><span>Interactive Data Visualization · 2026 Edition</span></div>
+<h1>Parental Leave,<br>Decoded.</h1>
+<p>Explore employment and parental leave policies across the world through an immersive, data-rich dashboard built for policy researchers, economists, and curious minds.</p>
+</section>
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
+<!-- KPI Cards -->
+<div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+<div class="kpi-card kpi-1">
+<div class="kpi-icon">👶🧒</div>
+<div class="kpi-value" id="kpiCountries">-</div>
+<div class="kpi-label">Countries Tracked</div>
+<div class="kpi-trend" id="kpiCountriesTrend">jurisdictions</div>
+<div class="kpi-spark" id="sparkCountries"></div>
+</div>
+<div class="kpi-card kpi-2">
+<div class="kpi-icon">👨‍👩‍👧</div>
+<div class="kpi-value" id="kpiYears">-</div>
+<div class="kpi-label">Years of Data</div>
+<div class="kpi-trend" id="kpiYearsTrend">-</div>
+<div class="kpi-spark" id="sparkYears"></div>
+</div>
+<div class="kpi-card kpi-3">
+<div class="kpi-icon">👨‍👶</div>
+<div class="kpi-value" id="kpiRecords">-</div>
+<div class="kpi-label">Total Records</div>
+<div class="kpi-trend">data points</div>
+<div class="kpi-spark" id="sparkRecords"></div>
+</div>
+<div class="kpi-card kpi-4">
+<div class="kpi-icon">👶👩‍👧</div>
+<div class="kpi-value" id="kpiMat">-</div>
+<div class="kpi-label">Avg Maternity (mo)</div>
+<div class="kpi-trend" id="kpiMatTrend">📈 trend</div>
+<div class="kpi-spark" id="sparkMat"></div>
+</div>
+<div class="kpi-card kpi-5">
+<div class="kpi-icon">📈📉📈</div>
+<div class="kpi-value" id="kpiPar">-</div>
+<div class="kpi-label">Avg Parental (mo)</div>
+<div class="kpi-trend" id="kpiParTrend">📈 trend</div>
+<div class="kpi-spark" id="sparkPar"></div>
+</div>
+<div class="kpi-card kpi-6">
+<div class="kpi-icon">📈📈</div>
+<div class="kpi-value" id="kpiLatest">-</div>
+<div class="kpi-label">Latest Year</div>
+<div class="kpi-trend">most recent</div>
+<div class="kpi-spark" id="sparkLatest"></div>
+</div>
+</div>
+
+<!-- Filters -->
+<div class="glass filter-bar">
+<div class="filter-group">
+<label>🌍 Primary Country</label>
+<select id="countryFilter"><option value="">🌐 All Countries (Global Avg)</option></select>
+</div>
+<div class="filter-group">
+<label>📊 Primary Metric</label>
+<select id="metricFilter">
+<option value="mat_m_ld_bb">Maternity Leave (Birth)</option>
+<option value="jp_ld_m">Job Protection (mo)</option>
+<option value="par1_ld">Parental Leave 1 (mo)</option>
+<option value="par_incentives">Parental Incentives</option>
+</select>
+</div>
+<div class="filter-group">
+<label>📅 Year Range</label>
+<div class="flex items-center gap-2">
+<select id="yearStart" class="flex-1"></select>
+<span style="color: var(--text-secondary);">→</span>
+<select id="yearEnd" class="flex-1"></select>
+</div>
+</div>
+<div class="filter-group">
+<label>🔄 Compare Countries</label>
+<div class="chip-container" id="compareChips">
+<span class="text-xs" style="color: var(--text-secondary); align-self: center;">Click to toggle (max 4)</span>
+</div>
+</div>
+</div>
+
+<!-- Tabs -->
+<div class="tab-bar scrollbar-hide" id="tabBar">
+<button class="tab-btn active" data-tab="overview">📊 Overview</button>
+<button class="tab-btn" data-tab="trends">📈 Trends</button>
+<button class="tab-btn" data-tab="compare">⚖️ Compare</button>
+<button class="tab-btn" data-tab="distribution">🔄 Distribution</button>
+<button class="tab-btn" data-tab="geography">🌍 Geography</button>
+<button class="tab-btn" data-tab="rankings">🏆 Rankings</button>
+</div>
+<!-- OVERVIEW TAB -->
+<div class="tab-panel" data-panel="overview">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+<div class="chart-card lg:col-span-2">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📊</div><div>Multi-Metric Evolution<div class="chart-subtitle">All four core policy dimensions over time</div></div></div>
+<div class="chart-tag">Real-time</div>
+</div>
+<div class="chart-body tall" id="chartMultiLine"></div>
+</div>
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">💪</div><div>Policy Strength Index<div class="chart-subtitle">Composite score (latest)</div></div></div>
+</div>
+<div class="chart-body" id="chartGauge"></div>
+</div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🏆</div><div>Top 15 Leaders<div class="chart-subtitle">Highest policy values (latest year)</div></div></div>
+<div class="chart-tag">Gradient</div>
+</div>
+<div class="chart-body tall" id="chartTopBar"></div>
+</div>
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📊</div><div>Leave Composition<div class="chart-subtitle">Maternity vs Parental breakdown</div></div></div>
+<div class="chart-tag">Stacked</div>
+</div>
+<div class="chart-body tall" id="chartStackedArea"></div>
+</div>
+</div>
+</div>
+
+<!-- TRENDS TAB -->
+<div class="tab-panel hidden" data-panel="trends">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🔍</div><div>Trend Explorer<div class="chart-subtitle">Zoom, brush & explore patterns</div></div></div>
+</div>
+<div class="chart-body tall" id="chartTrendZoom"></div>
+</div>
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🎯</div><div>Multi-Dimensional Profile<div class="chart-subtitle">Radar comparison of 4 metrics</div></div></div>
+</div>
+<div class="chart-body tall" id="chartRadar"></div>
+</div>
+</div>
+<div class="chart-card mb-6">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🌊</div><div>Policy Flow Over Time<div class="chart-subtitle">Smooth area chart for selected countries</div></div></div>
+</div>
+<div class="chart-body tall" id="chartArea"></div>
+</div>
+</div>
+
+<!-- COMPARE TAB -->
+<div class="tab-panel hidden" data-panel="compare">
+<div class="chart-card mb-6">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🫧</div><div>Bubble Universe<div class="chart-subtitle">Maternity vs Parental · size = JP · color = Year</div></div></div>
+<div class="chart-tag">Interactive</div>
+</div>
+<div class="chart-body tall" id="chartBubble"></div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🕸️</div><div>Parallel Coordinates<div class="chart-subtitle">Multi-metric country comparison</div></div></div>
+</div>
+<div class="chart-body tall" id="chartParallel"></div>
+</div>
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🎯</div><div>Multi-Country Radar<div class="chart-subtitle">Overlay multiple countries</div></div></div>
+</div>
+<div class="chart-body tall" id="chartMultiRadar"></div>
+</div>
+</div>
+</div>
+<!-- DISTRIBUTION TAB -->
+<div class="tab-panel hidden" data-panel="distribution">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🗺️</div><div>Country × Year Heatmap<div class="chart-subtitle">Visual coverage matrix</div></div></div>
+</div>
+<div class="chart-body tall" id="chartHeatmap"></div>
+</div>
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📈</div><div>Distribution Density<div class="chart-subtitle">Where most values cluster</div></div></div>
+</div>
+<div class="chart-body tall" id="chartViolin"></div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📊</div><div>Box Plot Statistics<div class="chart-subtitle">Median, quartiles & outliers</div></div></div>
+</div>
+<div class="chart-body tall" id="chartBox"></div>
+</div>
+<div class="chart-card">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🗺️</div><div>Treemap of Policies<div class="chart-subtitle">Countries sized by total leave days</div></div></div>
+</div>
+<div class="chart-body tall" id="chartTreemap"></div>
+</div>
+</div>
+</div>
+
+<!-- GEOGRAPHY TAB -->
+<div class="tab-panel hidden" data-panel="geography">
+<div class="chart-card mb-6">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📊</div><div>Regional Comparison<div class="chart-subtitle">Average policy values by region (latest)</div></div></div>
+</div>
+<div class="chart-body tall" id="chartRegion"></div>
+</div>
+<div class="chart-card mb-6">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">🌐</div><div>Country Globe<div class="chart-subtitle">Scatter map of all countries</div></div></div>
+</div>
+<div class="chart-body tall" id="chartGlobe"></div>
+</div>
+</div>
+
+<!-- RANKINGS TAB -->
+<div class="tab-panel hidden" data-panel="rankings">
+<div class="chart-card mb-6">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📈</div><div>Ranking Evolution<div class="chart-subtitle">Top 10 countries over time</div></div></div>
+</div>
+<div class="chart-body tall" id="chartRanking"></div>
+</div>
+<div class="chart-card mb-6">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📊</div><div>Top 20 Leaders<div class="chart-subtitle">Average across all years</div></div></div>
+</div>
+<div class="chart-body tall" id="chartTop20"></div>
+</div>
+<div class="chart-card mb-6">
+<div class="chart-card-header">
+<div class="chart-title"><div class="chart-icon-pill">📋</div><div>Detailed Data Table<div class="chart-subtitle">Latest year · sorted by metric</div></div></div>
+</div>
+<div style="max-height: 500px; overflow-y: auto;">
+<table class="data-table" id="dataTable">
+<thead><tr><th>Country</th><th>Year</th><th>Maternity (mo)</th><th>Parental (mo)</th><th>JP (mo)</th><th>Incentives</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+
+<footer>
+<p>Built with ❤️ using <a href="https://echarts.apache.org/" target="_blank">Apache ECharts</a> & <a href="https://tailwindcss.com/" target="_blank">Tailwind CSS</a> · Data: EPLP Dataset 2026</p>
+</footer>
+<script>
+let allData = [];
+let chartsInstances = {};
+let selectedCompare = [];
+const METRICS = {
+    'mat_m_ld_bb': 'Maternity Leave (mo)',
+    'jp_ld_m': 'Job Protection (mo)',
+    'par1_ld': 'Parental Leave 1 (mo)',
+    'par_incentives': 'Parental Incentives'
+};
+const METRIC_COLORS = {
+    'mat_m_ld_bb': '#7c3aed',
+    'jp_ld_m': '#06b6d4',
+    'par1_ld': '#ec4899',
+    'par_incentives': '#10b981'
+};
+
+// Country code -> ISO mapping for globe
+const COUNTRY_COORDS = {
+    'AT':[47.5,14.5],'BE':[50.5,4.5],'BG':[43,25],'CY':[35,33],'CZ':[49.7,15.5],'DE':[51,9],'DK':[56,10],'EE':[59,26],
+    'ES':[40,-4],'FI':[64,26],'FR':[46,2],'GR':[39,22],'HR':[45,16],'HU':[47,19],'IE':[53,-8],'IT':[42,12],
+    'LT':[55,24],'LU':[49.5,6],'LV':[57,25],'MT':[35.9,14.4],'NL':[52,5],'PL':[52,19],'PT':[39.5,-8],'RO':[46,25],
+    'SE':[62,15],'SI':[46,15],'SK':[48.7,19.7],'GB':[54,-2],'US':[39,-98],'CA':[56,-106],'AU':[-25,134],'NZ':[-41,174],
+    'JP':[36,138],'KR':[36,128],'CN':[35,105],'IN':[21,78],'BR':[-14,-51],'MX':[23,-102],'AR':[-34,-64],'CL':[-30,-71],
+    'NO':[60,9],'CH':[46.8,8.2],'IS':[65,-18],'TR':[39,35],'IL':[31.5,35],'ZA':[-29,24],'EG':[27,30],'NG':[10,8],
+    'KE':[0,38],'RU':[60,100],'UA':[49,32],'SA':[25,45],'AE':[24,54],'TH':[15,100],'ID':[-5,120],'MY':[4,102],
+    'PH':[13,122],'SG':[1.3,103.8],'HK':[22,114],'TW':[24,121]
+};
+
+// Country region mapping
+const REGION_MAP = {
+    'AT':'Europe','BE':'Europe','BG':'Europe','CY':'Europe','CZ':'Europe','DE':'Europe','DK':'Europe','EE':'Europe',
+    'ES':'Europe','FI':'Europe','FR':'Europe','GR':'Europe','HR':'Europe','HU':'Europe','IE':'Europe','IT':'Europe',
+    'LT':'Europe','LU':'Europe','LV':'Europe','MT':'Europe','NL':'Europe','PL':'Europe','PT':'Europe','RO':'Europe',
+    'SE':'Europe','SI':'Europe','SK':'Europe','GB':'Europe','NO':'Europe','CH':'Europe','IS':'Europe',
+    'US':'Americas','CA':'Americas','MX':'Americas','BR':'Americas','AR':'Americas','CL':'Americas',
+    'AU':'Oceania','NZ':'Oceania',
+    'JP':'Asia','KR':'Asia','CN':'Asia','IN':'Asia','TH':'Asia','ID':'Asia','MY':'Asia','PH':'Asia','SG':'Asia','HK':'Asia','TW':'Asia','IL':'Asia','TR':'Asia','AE':'Asia','SA':'Asia',
+    'ZA':'Africa','EG':'Africa','NG':'Africa','KE':'Africa',
+    'RU':'Eurasia','UA':'Eurasia'
+};
+
+const PALETTE = ['#7c3aed','#06b6d4','#ec4899','#10b981','#f59e0b','#ef4444','#3b82f6','#a78bfa','#22d3ee','#fb7185','#34d399','#fbbf24','#f472b6','#60a5fa','#c084fc'];
+
+function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+function textColor() { return isDark() ? '#94a3b8' : '#475569'; }
+function bgColor() { return isDark() ? '#12122a' : '#ffffff'; }
+function borderColor() { return isDark() ? 'rgba(255,255,255,0.08)' : '#e2e8f0'; }
+
+function getCommonOption() {
+    return {
+        backgroundColor: 'transparent',
+        textStyle: { color: textColor(), fontFamily: 'Inter' },
+        tooltip: { backgroundColor: isDark() ? 'rgba(18,18,42,0.95)' : 'rgba(255,255,255,0.95)', borderColor: borderColor(), textStyle: { color: isDark() ? '#f1f5f9' : '#0f172a' } }
+    };
+}
+
+function parseVal(v) { const n = parseFloat(v); return isNaN(n) || n < 0 ? 0 : n; }
+
+function initCharts() {
+    const ids = ['chartMultiLine','chartGauge','chartTopBar','chartStackedArea','chartTrendZoom','chartRadar','chartArea','chartBubble','chartParallel','chartMultiRadar','chartHeatmap','chartViolin','chartBox','chartTreemap','chartRegion','chartGlobe','chartRanking','chartTop20'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) chartsInstances[id] = echarts.init(el, null, { renderer: 'canvas' });
+    });
+}
+
+function updateStatistics() {
+    const countries = [...new Set(allData.map(d => d.country))];
+    const years = [...new Set(allData.map(d => +d.year))].sort((a,b)=>a-b);
+    const latestYear = Math.max(...years);
+    const earliestYear = Math.min(...years);
+
+    document.getElementById('kpiCountries').textContent = countries.length;
+    document.getElementById('kpiYears').textContent = years.length;
+    document.getElementById('kpiRecords').textContent = allData.length.toLocaleString();
+    document.getElementById('kpiLatest').textContent = latestYear;
+            document.getElementById('kpiYearsTrend').textContent = `${earliestYear} — ${latestYear}`;
+
+    // Maternity average trend
+    const matByYear = {};
+    const parByYear = {};
+    allData.forEach(d => {
+        const y = +d.year;
+        if (!matByYear[y]) matByYear[y] = [];
+        if (!parByYear[y]) parByYear[y] = [];
+        matByYear[y].push(parseVal(d.mat_m_ld_bb));
+        parByYear[y].push(parseVal(d.par1_ld));
+    });
+    const avgMatByYear = Object.keys(matByYear).sort().map(y => matByYear[y].reduce((a,b)=>a+b,0)/matByYear[y].length);
+    const avgParByYear = Object.keys(parByYear).sort().map(y => parByYear[y].reduce((a,b)=>a+b,0)/parByYear[y].length);
+    const sortedYears = Object.keys(matByYear).sort();
+
+    const lastMat = avgMatByYear[avgMatByYear.length-1];
+    const firstMat = avgMatByYear[0];
+    const lastPar = avgParByYear[avgParByYear.length-1];
+    const firstPar = avgParByYear[0];
+    document.getElementById('kpiMat').textContent = lastMat.toFixed(1);
+    document.getElementById('kpiPar').textContent = lastPar.toFixed(1);
+            document.getElementById('kpiMatTrend').textContent = `${(lastMat - firstMat) >= 0 ? '↑' : '↓'} ${Math.abs(lastMat - firstMat).toFixed(1)} mo`;
+            document.getElementById('kpiParTrend').textContent = `${(lastPar - firstPar) >= 0 ? '↑' : '↓'} ${Math.abs(lastPar - firstPar).toFixed(1)} mo`;
+
+    // Populate sparklines
+    const sparkOpts = (data, color) => ({
+        ...getCommonOption(),
+        grid: { left: 0, right: 0, top: 5, bottom: 0 },
+        xAxis: { type: 'category', show: false, data: data.map((_,i)=>i) },
+        yAxis: { type: 'value', show: false, scale: true },
+        series: [{ type: 'line', data, smooth: true, symbol: 'none', lineStyle: { color, width: 2 }, areaStyle: { color: { type: 'linear', x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:color+'66'},{offset:1,color:color+'00'}] } } }]
+    });
+    if (chartsInstances.sparkCountries || document.getElementById('sparkCountries')) {
+        const countsByYear = sortedYears.map(y => new Set(allData.filter(d => +d.year == y).map(d => d.country)).size);
+        chartsInstances['sparkCountries'] = chartsInstances['sparkCountries'] || echarts.init(document.getElementById('sparkCountries'));
+        chartsInstances['sparkCountries'].setOption(sparkOpts(countsByYear, '#ffffff'));
+    }
+    ['sparkYears','sparkRecords','sparkMat','sparkPar','sparkLatest'].forEach(id => {
+        chartsInstances[id] = chartsInstances[id] || echarts.init(document.getElementById(id));
+    });
+    chartsInstances['sparkYears'].setOption(sparkOpts(years.map((_,i)=>i+1), '#ffffff'));
+    chartsInstances['sparkRecords'].setOption(sparkOpts(sortedYears.map(y => allData.filter(d => +d.year == y).length), '#ffffff'));
+    chartsInstances['sparkMat'].setOption(sparkOpts(avgMatByYear, '#ffffff'));
+    chartsInstances['sparkPar'].setOption(sparkOpts(avgParByYear, '#ffffff'));
+    chartsInstances['sparkLatest'].setOption(sparkOpts([1,2,3,4,5,6,7,8,latestYear-earliestYear], '#ffffff'));
+
+    // Populate year selects
+    const ys = document.getElementById('yearStart');
+    const ye = document.getElementById('yearEnd');
+    years.forEach(y => {
+        ys.innerHTML += `<option value="${y}">${y}</option>`;
+        ye.innerHTML += `<option value="${y}">${y}</option>`;
+    });
+    ys.value = earliestYear;
+    ye.value = latestYear;
+}
+
+function populateFilters() {
+    const countries = [...new Set(allData.map(d => d.country))].sort();
+    const sel = document.getElementById('countryFilter');
+    const chips = document.getElementById('compareChips');
+    countries.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        sel.appendChild(opt);
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = c;
+        chip.onclick = () => toggleCompare(c, chip);
+        chips.appendChild(chip);
+    });
+    // Select top 4 by default
+    const latestYear = Math.max(...allData.map(d => +d.year));
+    const top4 = allData.filter(d => +d.year === latestYear).map(d => ({c: d.country, v: parseVal(d.par1_ld) + parseVal(d.mat_m_ld_bb)})).sort((a,b)=>b.v-a.v).slice(0,4).map(x=>x.c);
+    top4.forEach(c => {
+        const chip = [...chips.children].find(el => el.textContent === c);
+        if (chip) toggleCompare(c, chip);
+    });
+}
+
+function toggleCompare(country, chip) {
+    if (selectedCompare.includes(country)) {
+        selectedCompare = selectedCompare.filter(c => c !== country);
+        chip.classList.remove('active');
+    } else if (selectedCompare.length < 4) {
+        selectedCompare.push(country);
+        chip.classList.add('active');
+    }
+    updateAllCharts();
+}
+
+function getFilteredData() {
+    const country = document.getElementById('countryFilter').value;
+    const ys = +document.getElementById('yearStart').value;
+    const ye = +document.getElementById('yearEnd').value;
+    let data = allData.filter(d => +d.year >= ys && +d.year <= ye);
+    if (country) data = data.filter(d => d.country === country);
+    return data;
+}
+function updateAllCharts() {
+    updateMultiLine();
+    updateGauge();
+    updateTopBar();
+    updateStackedArea();
+    updateTrendZoom();
+    updateRadar();
+    updateArea();
+    updateBubble();
+    updateParallel();
+    updateMultiRadar();
+    updateHeatmap();
+    updateViolin();
+    updateBox();
+    updateTreemap();
+    updateRegion();
+    updateGlobe();
+    updateRanking();
+    updateTop20();
+    updateDataTable();
+}
+
+function updateMultiLine() {
+    const years = [...new Set(allData.map(d => +d.year))].sort((a,b)=>a-b);
+    const series = Object.keys(METRICS).map(m => {
+        const data = years.map(y => {
+            const vals = allData.filter(d => +d.year === y).map(d => parseVal(d[m]));
+            return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+        });
+        return { name: METRICS[m], type: 'line', smooth: true, data: data.map(v => +v.toFixed(2)), lineStyle: { width: 3 }, itemStyle: { color: METRIC_COLORS[m] }, symbol: 'circle', symbolSize: 6, areaStyle: { color: { type: 'linear', x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:METRIC_COLORS[m]+'44'},{offset:1,color:METRIC_COLORS[m]+'00'}] } }, emphasis: { focus: 'series' } };
+    });
+    chartsInstances.chartMultiLine.setOption({
+        ...getCommonOption(),
+        legend: { textStyle: { color: textColor() }, top: 10 },
+        grid: { left: 50, right: 30, top: 50, bottom: 50 },
+        xAxis: { type: 'category', data: years, axisLine: { lineStyle: { color: borderColor() } }, axisLabel: { color: textColor() } },
+        yAxis: { type: 'value', splitLine: { lineStyle: { color: borderColor() } }, axisLabel: { color: textColor() } },
+        series, animationDuration: 1500, animationEasing: 'cubicOut'
+    }, true);
+}
+
+function updateGauge() {
+    const latest = Math.max(...allData.map(d => +d.year));
+    const latestData = allData.filter(d => +d.year === latest);
+    const composite = (latestData.reduce((s,d) => s + parseVal(d.mat_m_ld_bb) + parseVal(d.jp_ld_m) + parseVal(d.par1_ld), 0) / latestData.length);
+    chartsInstances.chartGauge.setOption({
+        ...getCommonOption(),
+        series: [{
+            type: 'gauge',
+            startAngle: 200, endAngle: -20,
+            min: 0, max: 60,
+            progress: { show: true, width: 18, itemStyle: { color: { type: 'linear', x:0,y:0,x2:1,y2:0, colorStops:[{offset:0,color:'#7c3aed'},{offset:0.5,color:'#ec4899'},{offset:1,color:'#06b6d4'}] } } },
+            axisLine: { lineStyle: { width: 18, color: [[1, isDark() ? 'rgba(255,255,255,0.05)' : '#f1f5f9']] } },
+            pointer: { show: false },
+            axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: textColor(), fontSize: 10, distance: -30 },
+            anchor: { show: false },
+            detail: { valueAnimation: true, fontSize: 36, fontFamily: 'Space Grotesk', fontWeight: 700, color: isDark() ? '#f1f5f9' : '#0f172a', formatter: '{value}', offsetCenter: [0, '60%'] },
+            title: { show: true, offsetCenter: [0, '90%'], color: textColor(), fontSize: 12 },
+            data: [{ value: +composite.toFixed(1), name: 'Composite Score' }]
+        }]
+    }, true);
+}
+
+function updateTopBar() {
+    const metric = document.getElementById('metricFilter').value;
+    const latest = Math.max(...allData.map(d => +d.year));
+    const map = {};
+    allData.filter(d => +d.year === latest).forEach(d => { map[d.country] = parseVal(d[metric]); });
+    const arr = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,15);
+    const maxV = Math.max(...arr.map(a=>a[1]), 1);
+    chartsInstances.chartTopBar.setOption({
+        ...getCommonOption(),
+        grid: { left: 60, right: 60, top: 20, bottom: 30 },
+        xAxis: { type: 'value', show: false },
+        yAxis: { type: 'category', data: arr.reverse().map(a=>a[0]), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textColor(), fontSize: 11 } },
+        series: [{
+            type: 'bar', data: arr.map(a => ({ value: a[1], itemStyle: { color: { type: 'linear', x:0,y:0,x2:1,y2:0, colorStops:[{offset:0,color:'#7c3aed'},{offset:1,color:'#ec4899'}] }, borderRadius: [0, 6, 6, 0] } })),
+            label: { show: true, position: 'right', color: textColor(), fontWeight: 600, formatter: '{c}' },
+            barWidth: 18
+        }],
+        animationDelay: i => i * 50
+    }, true);
+}
+
+function updateStackedArea() {
+    const years = [...new Set(allData.map(d => +d.year))].sort((a,b)=>a-b);
+    const series = Object.keys(METRICS).map(m => {
+        const data = years.map(y => {
+            const vals = allData.filter(d => +d.year === y).map(d => parseVal(d[m]));
+            return vals.length ? +(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : 0;
+        });
+        return { name: METRICS[m], type: 'line', stack: 'total', smooth: true, data, lineStyle: { width: 0 }, itemStyle: { color: METRIC_COLORS[m] }, areaStyle: { opacity: 0.8 }, emphasis: { focus: 'series' } };
+    });
+    chartsInstances.chartStackedArea.setOption({
+        ...getCommonOption(),
+        legend: { textStyle: { color: textColor() }, top: 10 },
+        grid: { left: 50, right: 30, top: 50, bottom: 40 },
+        xAxis: { type: 'category', data: years, boundaryGap: false, axisLabel: { color: textColor() } },
+        yAxis: { type: 'value', axisLabel: { color: textColor() } },
+        series
+    }, true);
+}
+function updateTrendZoom() {
+    const metric = document.getElementById('metricFilter').value;
+    const country = document.getElementById('countryFilter').value;
+    const data = country ? allData.filter(d => d.country === country) : allData;
+    const years = [...new Set(data.map(d => +d.year))].sort((a,b)=>a-b);
+    const values = years.map(y => {
+        const v = data.filter(d => +d.year === y).map(d => parseVal(d[metric]));
+        return v.length ? +(v.reduce((a,b)=>a+b,0)/v.length).toFixed(2) : 0;
+    });
+    chartsInstances.chartTrendZoom.setOption({
+        ...getCommonOption(),
+        title: { text: country ? country : 'Global Average', left: 'center', textStyle: { color: textColor(), fontSize: 14, fontFamily: 'Space Grotesk' } },
+        grid: { left: 50, right: 50, top: 60, bottom: 80 },
+        xAxis: { type: 'category', data: years, axisLabel: { color: textColor() } },
+        yAxis: { type: 'value', axisLabel: { color: textColor() } },
+        dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', height: 20, bottom: 20, start: 0, end: 100, textStyle: { color: textColor() }, fillerColor: 'rgba(124,58,237,0.2)', borderColor: borderColor(), handleStyle: { color: '#7c3aed' } }],
+        series: [{ type: 'line', smooth: true, data: values, symbol: 'circle', symbolSize: 6, lineStyle: { color: '#7c3aed', width: 3 }, itemStyle: { color: '#7c3aed' }, areaStyle: { color: { type: 'linear', x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(124,58,237,0.4)'},{offset:1,color:'rgba(124,58,237,0)'}] } } }]
+    }, true);
+}
+
+function updateRadar() {
+    const country = document.getElementById('countryFilter').value;
+    if (!country) { chartsInstances.chartRadar.clear(); return; }
+    const latest = Math.max(...allData.map(d => +d.year));
+    const d = allData.find(r => r.country === country && +r.year === latest);
+    if (!d) { chartsInstances.chartRadar.clear(); return; }
+    const values = Object.keys(METRICS).map(m => parseVal(d[m]));
+    const maxVals = Object.keys(METRICS).map(m => Math.max(...allData.map(r => parseVal(r[m]))));
+    chartsInstances.chartRadar.setOption({
+        ...getCommonOption(),
+                title: { text: country + ' — ' + latest, left: 'center', textStyle: { color: textColor(), fontFamily: 'Space Grotesk' } },
+        radar: { indicator: Object.keys(METRICS).map((m, i) => ({ name: METRICS[m].split(' ')[0], max: maxVals[i] * 1.1 })), splitArea: { areaStyle: { color: [isDark() ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'] } }, axisName: { color: textColor(), fontSize: 11 } },
+        series: [{ type: 'radar', symbol: 'circle', symbolSize: 8, data: [{ value: values, name: country, lineStyle: { color: '#7c3aed', width: 3 }, itemStyle: { color: '#7c3aed' }, areaStyle: { color: 'rgba(124,58,237,0.3)' } }] }]
+    }, true);
+}
+
+function updateArea() {
+    const countries = selectedCompare.length ? selectedCompare : [...new Set(allData.map(d => d.country))].slice(0, 5);
+    const years = [...new Set(allData.map(d => +d.year))].sort((a,b)=>a-b);
+    const series = countries.map((c, i) => {
+        const data = years.map(y => {
+            const v = allData.filter(d => d.country === c && +d.year === y).map(d => parseVal(d.mat_m_ld_bb));
+            return v.length ? v[0] : 0;
+        });
+        return { name: c, type: 'line', smooth: true, data, stack: 'total', lineStyle: { width: 1.5, color: PALETTE[i % PALETTE.length] }, itemStyle: { color: PALETTE[i % PALETTE.length] }, areaStyle: { opacity: 0.5 }, emphasis: { focus: 'series' } };
+    });
+    chartsInstances.chartArea.setOption({
+        ...getCommonOption(),
+        legend: { textStyle: { color: textColor() }, top: 10, type: 'scroll' },
+        grid: { left: 50, right: 30, top: 50, bottom: 40 },
+        xAxis: { type: 'category', data: years, boundaryGap: false, axisLabel: { color: textColor() } },
+        yAxis: { type: 'value', axisLabel: { color: textColor() } },
+        series
+    }, true);
+}
+
+function updateBubble() {
+    const latest = Math.max(...allData.map(d => +d.year));
+    const data = allData.filter(d => +d.year === latest).map(d => [parseVal(d.mat_m_ld_bb), parseVal(d.par1_ld), parseVal(d.jp_ld_m), d.country]);
+    chartsInstances.chartBubble.setOption({
+        ...getCommonOption(),
+        grid: { left: 50, right: 30, top: 30, bottom: 50 },
+        xAxis: { name: 'Maternity Leave (mo)', nameTextStyle: { color: textColor() }, axisLabel: { color: textColor() } },
+        yAxis: { name: 'Parental Leave (mo)', nameTextStyle: { color: textColor() }, axisLabel: { color: textColor() } },
+        tooltip: { ...getCommonOption().tooltip, formatter: p => `<b>${p.data[3]}</b><br>Maternity: ${p.data[0]} mo<br>Parental: ${p.data[1]} mo<br>JP: ${p.data[2]} mo` },
+        series: [{ type: 'scatter', data, symbolSize: d => Math.max(8, Math.sqrt(d[2]) * 4), itemStyle: { color: { type: 'radial', x:0.5,y:0.5,r:0.5, colorStops:[{offset:0,color:'#ec4899'},{offset:1,color:'#7c3aed'}] }, opacity: 0.7, borderColor: '#fff', borderWidth: 1 } }]
+    }, true);
+}
+
+function updateParallel() {
+    const latest = Math.max(...allData.map(d => +d.year));
+    const metrics = Object.keys(METRICS);
+    const data = allData.filter(d => +d.year === latest).map(d => metrics.map(m => parseVal(d[m])).concat(d.country));
+    chartsInstances.chartParallel.setOption({
+        ...getCommonOption(),
+        parallelAxis: metrics.map((m, i) => ({ dim: i, name: METRICS[m].split(' ').slice(0,2).join(' '), nameTextStyle: { color: textColor() }, axisLabel: { color: textColor() } })),
+        parallel: { left: 50, right: 50, bottom: 50, top: 30, parallelAxisDefault: { axisLine: { lineStyle: { color: borderColor() } } } },
+        tooltip: { ...getCommonOption().tooltip, formatter: p => `<b>${p.data[4]}</b><br>` + metrics.map((m,i) => `${m}: ${p.data[i]}`).join('<br>') },
+        series: [{ type: 'parallel', lineStyle: { color: '#7c3aed', width: 1, opacity: 0.5 }, data, emphasis: { lineStyle: { color: '#ec4899', width: 3, opacity: 1 } } }]
+    }, true);
+}
+
+function updateMultiRadar() {
+    const countries = selectedCompare.length ? selectedCompare : [...new Set(allData.map(d => d.country))].slice(0, 3);
+    const latest = Math.max(...allData.map(d => +d.year));
+    const maxVals = Object.keys(METRICS).map(m => Math.max(...allData.map(r => parseVal(r[m]))));
+    const series = countries.map((c, i) => {
+        const d = allData.find(r => r.country === c && +r.year === latest);
+        if (!d) return null;
+        return { value: Object.keys(METRICS).map(m => parseVal(d[m])), name: c, lineStyle: { color: PALETTE[i % PALETTE.length], width: 2 }, itemStyle: { color: PALETTE[i % PALETTE.length] }, areaStyle: { color: PALETTE[i % PALETTE.length], opacity: 0.15 } };
+    }).filter(Boolean);
+    chartsInstances.chartMultiRadar.setOption({
+        ...getCommonOption(),
+        legend: { textStyle: { color: textColor() }, top: 10 },
+        radar: { indicator: Object.keys(METRICS).map((m, i) => ({ name: METRICS[m].split(' ')[0], max: maxVals[i] * 1.1 })), splitArea: { areaStyle: { color: [isDark() ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'] } }, axisName: { color: textColor() } },
+        series: [{ type: 'radar', data: series, symbol: 'circle', symbolSize: 6 }]
+    }, true);
+}
+function updateHeatmap() {
+    const metric = document.getElementById('metricFilter').value;
+    const countries = [...new Set(allData.map(d => d.country))].sort();
+    const years = [...new Set(allData.map(d => +d.year))].sort((a,b)=>a-b);
+    const data = [];
+    countries.forEach((c, ci) => {
+        years.forEach((y, yi) => {
+            const r = allData.find(d => d.country === c && +d.year === y);
+            data.push([yi, ci, r ? parseVal(r[metric]) : 0]);
+        });
+    });
+    const max = Math.max(...data.map(d => d[2]), 1);
+    chartsInstances.chartHeatmap.setOption({
+        ...getCommonOption(),
+        grid: { left: 50, right: 30, top: 10, bottom: 80 },
+        xAxis: { type: 'category', data: years, axisLabel: { color: textColor(), rotate: 45, fontSize: 9 }, splitArea: { show: true } },
+        yAxis: { type: 'category', data: countries, axisLabel: { color: textColor(), fontSize: 9 }, splitArea: { show: true } },
+        visualMap: { min: 0, max, calculable: true, orient: 'horizontal', left: 'center', bottom: 10, textStyle: { color: textColor() }, inRange: { color: ['#0f172a', '#7c3aed', '#ec4899', '#fde047'] } },
+                    tooltip: { ...getCommonOption().tooltip, formatter: p => `${countries[p.data[1]]} × ${years[p.data[0]]}<br><b>${p.data[2]}</b>` },
+        series: [{ type: 'heatmap', data, label: { show: false }, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } } }]
+    }, true);
+}
+
+function updateViolin() {
+    const metric = document.getElementById('metricFilter').value;
+    const countries = [...new Set(allData.map(d => d.country))];
+    const data = countries.map(c => {
+        const vals = allData.filter(d => d.country === c).map(d => parseVal(d[metric])).filter(v => v > 0);
+        if (vals.length < 2) return [0, 0, 0, 0, 0];
+        vals.sort((a,b) => a - b);
+        return [Math.min(...vals), vals[Math.floor(vals.length*0.25)], vals[Math.floor(vals.length*0.5)], vals[Math.floor(vals.length*0.75)], Math.max(...vals)];
+    });
+    chartsInstances.chartViolin.setOption({
+        ...getCommonOption(),
+        grid: { left: 50, right: 30, top: 10, bottom: 80 },
+        xAxis: { type: 'category', data: countries, axisLabel: { color: textColor(), rotate: 45, fontSize: 9 } },
+        yAxis: { type: 'value', axisLabel: { color: textColor() } },
+        tooltip: { ...getCommonOption().tooltip, formatter: p => `${p.name}<br>Min: ${p.data[0]}<br>Q1: ${p.data[1]}<br>Med: ${p.data[2]}<br>Q3: ${p.data[3]}<br>Max: ${p.data[4]}` },
+        series: [{ type: 'boxplot', data, itemStyle: { color: 'rgba(124,58,237,0.5)', borderColor: '#7c3aed', borderWidth: 2 } }]
+    }, true);
+}
+
+function updateBox() {
+    const years = [...new Set(allData.map(d => +d.year))].sort((a,b)=>a-b);
+    const data = years.map(y => {
+        const vals = allData.filter(d => +d.year === y).map(d => parseVal(d.mat_m_ld_bb)).filter(v => v > 0).sort((a,b)=>a-b);
+        if (vals.length < 2) return [0,0,0,0,0];
+        return [vals[0], vals[Math.floor(vals.length*0.25)], vals[Math.floor(vals.length*0.5)], vals[Math.floor(vals.length*0.75)], vals[vals.length-1]];
+    });
+    const outliers = years.map((y, yi) => {
+        const vals = allData.filter(d => +d.year === y).map(d => ({ c: d.country, v: parseVal(d.mat_m_ld_bb) })).filter(x => x.v > 0);
+        if (vals.length < 4) return [];
+        vals.sort((a,b)=>a.v-b.v);
+        const q1 = vals[Math.floor(vals.length*0.25)].v;
+        const q3 = vals[Math.floor(vals.length*0.75)].v;
+        const iqr = q3 - q1;
+        return vals.filter(x => x.v > q3 + 1.5*iqr).map(x => [yi, x.v, x.c]);
+    }).flat();
+    chartsInstances.chartBox.setOption({
+        ...getCommonOption(),
+        grid: { left: 50, right: 30, top: 10, bottom: 50 },
+        xAxis: { type: 'category', data: years, axisLabel: { color: textColor(), rotate: 45 } },
+        yAxis: { type: 'value', axisLabel: { color: textColor() } },
+        tooltip: { ...getCommonOption().tooltip, formatter: p => p.seriesName === 'outlier' ? `<b>${p.data[2]}</b><br>${p.data[1]} mo` : `${p.name}<br>Min: ${p.data[1]}<br>Q1: ${p.data[2]}<br>Med: ${p.data[3]}<br>Q3: ${p.data[4]}<br>Max: ${p.data[5]}` },
+        series: [
+            { name: 'box', type: 'boxplot', data, itemStyle: { color: 'rgba(124,58,237,0.4)', borderColor: '#7c3aed', borderWidth: 2 } },
+            { name: 'outlier', type: 'scatter', data: outliers, itemStyle: { color: '#ef4444' }, symbolSize: 8 }
+        ]
+    }, true);
+}
+
+function updateTreemap() {
+    const latest = Math.max(...allData.map(d => +d.year));
+    const data = allData.filter(d => +d.year === latest).map(d => ({
+        name: d.country,
+        value: parseVal(d.mat_m_ld_bb) + parseVal(d.par1_ld) + parseVal(d.jp_ld_m)
+    })).filter(d => d.value > 0);
+    chartsInstances.chartTreemap.setOption({
+        ...getCommonOption(),
+        tooltip: { ...getCommonOption().tooltip, formatter: p => `<b>${p.data.name}</b><br>${p.data.value.toFixed(1)} months total` },
+        series: [{
+            type: 'treemap',
+            data, roam: false,
+            breadcrumb: { show: false },
+            label: { show: true, color: '#fff', fontSize: 11, fontWeight: 600 },
+            itemStyle: { borderColor: bgColor(), borderWidth: 2, gapWidth: 2 },
+            levels: [{
+                itemStyle: { borderColor: bgColor(), borderWidth: 2, gapWidth: 2 },
+                colorSaturation: [0.4, 0.8]
+            }]
+        }]
+    }, true);
+}
+
+function updateRegion() {
+    const latest = Math.max(...allData.map(d => +d.year));
+    const regionMap = {};
+    allData.filter(d => +d.year === latest).forEach(d => {
+        const region = REGION_MAP[d.country] || 'Other';
+        if (!regionMap[region]) regionMap[region] = { mat: 0, par: 0, jp: 0, n: 0 };
+        regionMap[region].mat += parseVal(d.mat_m_ld_bb);
+        regionMap[region].par += parseVal(d.par1_ld);
+        regionMap[region].jp += parseVal(d.jp_ld_m);
+        regionMap[region].n += 1;
+    });
+    const regions = Object.keys(regionMap);
+    const data = regions.map(r => [
+        +(regionMap[r].mat / regionMap[r].n).toFixed(2),
+        +(regionMap[r].par / regionMap[r].n).toFixed(2),
+        +(regionMap[r].jp / regionMap[r].n).toFixed(2)
+    ]);
+    chartsInstances.chartRegion.setOption({
+        ...getCommonOption(),
+        legend: { textStyle: { color: textColor() }, top: 10 },
+        grid: { left: 50, right: 30, top: 50, bottom: 40 },
+        xAxis: { type: 'category', data: regions, axisLabel: { color: textColor() } },
+        yAxis: { type: 'value', axisLabel: { color: textColor() } },
+        series: [
+            { name: 'Maternity', type: 'bar', stack: 'r', data: data.map(d => d[0]), itemStyle: { color: METRIC_COLORS.mat_m_ld_bb } },
+            { name: 'Parental', type: 'bar', stack: 'r', data: data.map(d => d[1]), itemStyle: { color: METRIC_COLORS.par1_ld } },
+            { name: 'Job Protection', type: 'bar', stack: 'r', data: data.map(d => d[2]), itemStyle: { color: METRIC_COLORS.jp_ld_m } }
+        ]
+    }, true);
+}
+
+function updateGlobe() {
+    const latest = Math.max(...allData.map(d => +d.year));
+    const data = allData.filter(d => +d.year === latest && COUNTRY_COORDS[d.country]).map(d => ({
+        name: d.country, value: [...COUNTRY_COORDS[d.country].reverse(), parseVal(d.mat_m_ld_bb) + parseVal(d.par1_ld)]
+    }));
+    chartsInstances.chartGlobe.setOption({
+        ...getCommonOption(),
+        tooltip: { ...getCommonOption().tooltip, formatter: p => `<b>${p.data.name}</b><br>Combined: ${p.data.value[2].toFixed(1)} mo` },
+        visualMap: { show: false, min: 0, max: 50, inRange: { color: ['#7c3aed', '#ec4899', '#fde047'], colorAlpha: [0.4, 1] } },
+        geo: { show: false },
+        series: [{
+            type: 'scatter', coordinateSystem: 'geo', data,
+            symbolSize: d => Math.max(6, Math.sqrt(d[2]) * 3),
+            itemStyle: { color: '#7c3aed', opacity: 0.8, shadowBlur: 10, shadowColor: '#ec4899' }
+        }]
+    }, true);
+}
+function updateRanking() {
+    const metric = document.getElementById('metricFilter').value;
+    const years = [...new Set(allData.map(d => +d.year))].sort((a,b)=>a-b);
+    const countryMap = {};
+    allData.forEach(d => {
+        if (!countryMap[d.country]) countryMap[d.country] = {};
+        countryMap[d.country][+d.year] = parseVal(d[metric]);
+    });
+    const countries = Object.keys(countryMap);
+    const data = [];
+    countries.forEach((c, ci) => {
+        const sorted = years.filter(y => countryMap[c][y] !== undefined).sort((a,b) => countryMap[c][b] - countryMap[c][a]);
+        if (sorted.length >= 1) {
+            data.push({ name: c, type: 'line', smooth: true, data: years.map(y => countryMap[c][y] ?? null), connectNulls: true, lineStyle: { width: 2, color: PALETTE[ci % PALETTE.length] }, itemStyle: { color: PALETTE[ci % PALETTE.length] }, symbol: 'none', emphasis: { focus: 'series' } });
+        }
+    });
+    const topCountries = data.slice(0, 10);
+    chartsInstances.chartRanking.setOption({
+        ...getCommonOption(),
+        legend: { textStyle: { color: textColor() }, top: 10, type: 'scroll' },
+        grid: { left: 50, right: 30, top: 50, bottom: 50 },
+        xAxis: { type: 'category', data: years, axisLabel: { color: textColor() } },
+        yAxis: { type: 'value', axisLabel: { color: textColor() } },
+        series: topCountries
+    }, true);
+}
+
+function updateTop20() {
+    const metric = document.getElementById('metricFilter').value;
+    const countryMap = {};
+    allData.forEach(d => {
+        if (!countryMap[d.country]) countryMap[d.country] = [];
+        countryMap[d.country].push(parseVal(d[metric]));
+    });
+    const arr = Object.entries(countryMap).map(([c, vals]) => ({ c, v: vals.reduce((a,b)=>a+b,0)/vals.length })).sort((a,b) => b.v - a.v).slice(0, 20);
+    const maxV = Math.max(...arr.map(a => a.v), 1);
+    chartsInstances.chartTop20.setOption({
+        ...getCommonOption(),
+        grid: { left: 60, right: 80, top: 10, bottom: 30 },
+        xAxis: { type: 'value', show: false },
+        yAxis: { type: 'category', data: arr.reverse().map(a => a.c), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textColor(), fontSize: 11 } },
+        series: [{
+            type: 'bar', data: arr.map(a => a.v),
+            itemStyle: {
+                color: { type: 'linear', x:0,y:0,x2:1,y2:0, colorStops:[
+                    {offset:0,color:'#7c3aed'},
+                    {offset:0.5,color:'#ec4899'},
+                    {offset:1,color:'#f59e0b'}
+                ] },
+                borderRadius: [0, 8, 8, 0]
+            },
+            label: { show: true, position: 'right', color: textColor(), fontWeight: 600, formatter: p => p.value.toFixed(1) },
+            barWidth: 16
+        }]
+    }, true);
+}
+
+function updateDataTable() {
+    const latest = Math.max(...allData.map(d => +d.year));
+    const metric = document.getElementById('metricFilter').value;
+    const rows = allData.filter(d => +d.year === latest).map(d => ({
+        country: d.country, year: latest,
+        mat: parseVal(d.mat_m_ld_bb), par: parseVal(d.par1_ld), jp: parseVal(d.jp_ld_m), inc: d.par_incentives || 'N/A'
+    })).sort((a,b) => b[metric === 'mat_m_ld_bb' ? 'mat' : metric === 'par1_ld' ? 'par' : metric === 'jp_ld_m' ? 'jp' : 'mat'] - a[metric === 'mat_m_ld_bb' ? 'mat' : metric === 'par1_ld' ? 'par' : metric === 'jp_ld_m' ? 'jp' : 'mat']).slice(0, 50);
+    const tbody = document.querySelector('#dataTable tbody');
+    tbody.innerHTML = rows.map(r => `<tr><td><span class="flag">${r.country}</span>${r.country}</td><td>${r.year}</td><td><b>${r.mat.toFixed(1)}</b></td><td><b>${r.par.toFixed(1)}</b></td><td>${r.jp.toFixed(1)}</td><td>${r.inc}</td></tr>`).join('');
+}
+
+// Theme toggle
+document.getElementById('themeToggle').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    if (allData.length) updateAllCharts();
+});
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.querySelector(`[data-panel="${tab}"]`).classList.remove('hidden');
+        setTimeout(() => {
+            Object.values(chartsInstances).forEach(c => c && c.resize && c.resize());
+        }, 100);
+    });
+});
+
+// Filter listeners
+document.getElementById('countryFilter').addEventListener('change', updateAllCharts);
+document.getElementById('metricFilter').addEventListener('change', updateAllCharts);
+document.getElementById('yearStart').addEventListener('change', updateAllCharts);
+document.getElementById('yearEnd').addEventListener('change', updateAllCharts);
+
+// Export PNG
+document.getElementById('exportBtn').addEventListener('click', () => {
+    const active = document.querySelector('.tab-panel:not(.hidden)');
+    const charts = active.querySelectorAll('.chart-body');
+                alert('📊 Use the toolbar inside each chart (top-right) to download as PNG!\n\nEach ECharts visualization has its own export menu.');
+});
+
+// Resize handler
+window.addEventListener('resize', () => {
+    Object.values(chartsInstances).forEach(c => c && c.resize && c.resize());
+});
+
+// Load data (using XHR for file:// protocol compatibility)
+function loadCSV(url, callback) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200 || xhr.status === 0) {
+                callback(xhr.responseText);
+            } else {
+                console.error('Failed to load ' + url + ': HTTP ' + xhr.status);
+            }
+        }
+    };
+    xhr.send();
+}
+
+function loadJSON(url, callback) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && (xhr.status === 200 || xhr.status === 0)) {
+            try { callback(JSON.parse(xhr.responseText)); } catch(e) {}
+        }
+    };
+    xhr.send();
+}
+
+loadCSV('eplp.csv', function(csv) {
+    Papa.parse(csv, {
+        header: true, skipEmptyLines: true,
+        complete: (res) => {
+            allData = res.data.filter(d => d.year && d.country);
+            loadJSON('https://raw.githubusercontent.com/apache/echarts/master/test/data/map/json/world.json', function(worldJson) {
+                echarts.registerMap('world', worldJson);
+                if (chartsInstances.chartGlobe) updateGlobe();
+            });
+            initCharts();
+            updateStatistics();
+            populateFilters();
+            updateAllCharts();
+        }
+    });
+});
+</script>
+</body>
+</html>

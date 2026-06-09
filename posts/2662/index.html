@@ -1,0 +1,462 @@
+---
+title: Films Based on Video Games
+author: Manish Datt
+date: '2026-06-09'
+description: Top 10 game publishers and distributors.
+image: Films_videogames.png
+categories:
+- D3js
+- TidyTuesday
+layout: false
+slug: 2662
+---
+
+<h2 class="text-2xl lg:text-3xl m-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Films — Sankey + Data</title>
+  <link href="https://unpkg.com/tabulator-tables@5.5/dist/css/tabulator.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1f242e;
+      --text: #e6e9ef;
+      --muted: #8a93a6;
+      --accent: #4cc9f0;
+      --accent-2: #f72585;
+      --accent-3: #ffd166;
+      --accent-4: #06d6a0;
+      --border: #2a3140;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    h1 { margin: 0 0 6px 0; font-size: 28px; }
+    h2 { margin: 0 0 12px 0; font-size: 18px; color: var(--text); }
+    .subtitle { color: var(--muted); margin: 0 0 24px 0; font-size: 14px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .span-12 { grid-column: span 12; }
+    .chart-tall { min-height: 700px; }
+    #chartSankey { width: 100%; height: 640px; }
+    .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .filters label { color: var(--muted); font-size: 13px; }
+    .filters select, .filters input {
+      background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 6px 10px; font-size: 13px;
+    }
+    .dl-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--panel-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 12px; font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .dl-btn:hover { background: #2a3140; border-color: var(--accent); }
+    .dl-btn:active { transform: translateY(1px); }
+    .dl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .tabulator { background: var(--panel); border: none; }
+    .tabulator .tabulator-header { background: #2a3140; border-bottom: 1px solid #3a4252; }
+    .tabulator .tabulator-header .tabulator-col,
+    .tabulator .tabulator-header .tabulator-col .tabulator-col-content,
+    .tabulator .tabulator-header .tabulator-col .tabulator-col-title,
+    .tabulator .tabulator-header .tabulator-col .tabulator-col-title-holder { color: #ffffff !important; font-weight: 600 !important; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-arrow { border-top-color: #ffffff !important; }
+    .tabulator .tabulator-header .tabulator-col.tabulator-sortable[aria-sort="asc"] .tabulator-arrow { border-bottom-color: #ffffff !important; }
+    .tabulator .tabulator-header .tabulator-col.tabulator-sortable[aria-sort="desc"] .tabulator-arrow { border-top-color: #ffffff !important; }
+    .tabulator .tabulator-col { background: #2a3140 !important; }
+    .tabulator .tabulator-col:hover { background: #323a4a !important; }
+    .tabulator .tabulator-row { background: var(--panel); }
+    .tabulator .tabulator-row:nth-child(even) { background: var(--panel-2); }
+    .tabulator .tabulator-cell { color: var(--text); border-right: 1px solid var(--border); }
+    .tabulator-row.tabulator-selected { background: rgba(76, 201, 240, 0.18) !important; }
+  </style>
+</head>
+<body>
+  <h1>🎮 Game Films — Sankey + Data</h1>
+  <p class="subtitle">Flow of adaptations from subcategory through game publisher and distributor to release decade. Data: <code>game_films.csv</code></p>
+
+  <div class="grid">
+    <div class="card span-12 chart-tall">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <h2 style="margin:0;">Flow: Subcategory → Game Publisher → Distributor → Decade</h2>
+        <button id="btnSankeySvg" type="button" class="dl-btn" title="Download the Sankey as an SVG file">
+          <span aria-hidden="true">⬇</span> Download SVG
+        </button>
+      </div>
+      <div id="chartSankey" style="width:100%; height:560px;"></div>
+      <p class="legend-note" style="color:var(--muted);font-size:12px;margin-top:8px;">Thickness = number of films. Hover for exact counts. Publishers sorted descending by value; subcategory pinned at top.</p>
+    </div>
+  </div>
+
+  <div class="card span-12" style="margin-bottom:24px;">
+    <h2 style="padding:18px 18px 0 18px;">Browse the Data</h2>
+    <div class="filters" style="padding: 0 18px 12px 18px;">
+      <label>Category:
+        <select id="filter-category"><option value="">All</option></select>
+      </label>
+      <label>Search:
+        <input id="filter-search" placeholder="title, director, publisher…" />
+      </label>
+    </div>
+    <div id="table" style="height:55vh;"></div>
+  </div>
+
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/tabulator-tables@5.5/dist/js/tabulator.min.js"></script>
+  <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+  <script src="https://unpkg.com/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+
+  <script>
+  const splitMulti = (v) => (!v || v === 'NA') ? [] : String(v).split('|').map(s => s.trim()).filter(Boolean);
+  const toNum = (v) => {
+    if (v === undefined || v === null || v === '' || v === 'NA') return null;
+    const n = Number(String(v).replace(/[, ]/g, ''));
+    return isNaN(n) ? null : n;
+  };
+  const formatDate = (d) => {
+    const dt = (d instanceof Date) ? d : new Date(d);
+    return isNaN(dt) ? null : dt;
+  };
+  function countMap(values) {
+    const m = new Map();
+    values.forEach(v => m.set(v, (m.get(v) || 0) + 1));
+    return [...m.entries()].sort((a,b) => b[1] - a[1]);
+  }
+
+  let RAW = [];
+  let PROCESSED = null;
+
+  Papa.parse('game_films.csv', {
+    download: true,
+    header: true,
+    complete: function(results) {
+      RAW = results.data.filter(row => row.title && row.title !== 'NA' && row.title !== 'Undated');
+      PROCESSED = buildProcessed(RAW);
+      renderSankey(PROCESSED);
+      buildTable(RAW);
+    },
+    error: function(err) { console.error('CSV parse error', err); }
+  });
+
+  function buildProcessed(data) {
+    const distFlat = [];
+    const pubFlat = [];
+    data.forEach(r => {
+      splitMulti(r.distributor).forEach(d => distFlat.push(d));
+      splitMulti(r.original_game_publisher).forEach(p => pubFlat.push(p));
+    });
+    const distCounts = countMap(distFlat);
+    const pubCounts = countMap(pubFlat);
+    const topDistNames = distCounts.slice(0, 12).map(e => e[0]);
+    const topPubNames = pubCounts.slice(0, 12).map(e => e[0]);
+
+    const subCounts = countMap(data.map(r => r.subcategory || 'Unknown'));
+    const top10Subs = new Set(subCounts.slice(0, 10).map(e => e[0]));
+    const top10Pubs = new Set(pubCounts.slice(0, 10).map(e => e[0]));
+    const top10Dists = new Set(distCounts.slice(0, 10).map(e => e[0]));
+    const decadeOf = (y) => Math.floor(y / 10) * 10;
+    const SEP = '\u0001';
+    const nodeSet = new Set();
+    const linkCounts = new Map();
+    const bump = (k) => linkCounts.set(k, (linkCounts.get(k) || 0) + 1);
+    data.forEach(r => {
+      const subs = splitMulti(r.subcategory).filter(s => top10Subs.has(s));
+      const pubs = splitMulti(r.original_game_publisher).filter(p => top10Pubs.has(p));
+      const dists = splitMulti(r.distributor).filter(d => top10Dists.has(d));
+      const dt = formatDate(r.release_date);
+      const dec = dt ? String(decadeOf(dt.getFullYear())) : null;
+      if (!dec || subs.length === 0 || pubs.length === 0 || dists.length === 0) return;
+      const spSet = new Set();
+      subs.forEach(s => pubs.forEach(p => spSet.add(s + SEP + p)));
+      spSet.forEach(k => { bump(k); nodeSet.add(k.split(SEP)[0]); nodeSet.add(k.split(SEP)[1]); });
+      const pdSet = new Set();
+      pubs.forEach(p => dists.forEach(d => pdSet.add(p + SEP + d)));
+      pdSet.forEach(k => { bump(k); nodeSet.add(k.split(SEP)[0]); nodeSet.add(k.split(SEP)[1]); });
+      const ddSet = new Set();
+      dists.forEach(d => ddSet.add(d + SEP + dec));
+      ddSet.forEach(k => { bump(k); nodeSet.add(k.split(SEP)[0]); nodeSet.add(k.split(SEP)[1]); });
+    });
+    const nodeVals = new Map();
+    linkCounts.forEach((v, k) => {
+      const [s, t] = k.split(SEP);
+      nodeVals.set(s, (nodeVals.get(s) || 0) + v);
+      nodeVals.set(t, (nodeVals.get(t) || 0) + v);
+    });
+    const sankeyNodes = [...nodeSet].map(n => ({ name: n, value: nodeVals.get(n) || 0 }));
+    const sankeyLinks = [...linkCounts.entries()].map(([k, v]) => {
+      const [s, t] = k.split(SEP);
+      return { source: s, target: t, value: v };
+    });
+    const topSubNames = subCounts.slice(0, 10).map(e => e[0]);
+
+    return { distCounts, pubCounts, topDistNames, topPubNames, topSubNames, sankeyNodes, sankeyLinks, total: data.length };
+  }
+
+  // ---------- D3 Sankey ----------
+  let sankeyChart = null;
+
+  function renderSankey(p) {
+    const el = document.getElementById('chartSankey');
+    if (!el || typeof d3 === 'undefined' || typeof d3.sankey === 'undefined') return;
+    el.innerHTML = '';
+
+    const top10SubSet = new Set(p.topSubNames || []);
+    const top10PubSet = new Set(p.pubCounts.slice(0, 10).map(e => e[0]));
+    const top10DistSet = new Set(p.distCounts.slice(0, 10).map(e => e[0]));
+    const decadeRe = /^\d{4}$/;
+    const isDecade = (n) => decadeRe.test(n);
+    const isSub = (n) => top10SubSet.has(n);
+    const isPub = (n) => top10PubSet.has(n);
+    const isDist = (n) => top10DistSet.has(n);
+
+    const colorFor = (n) => {
+      if (isSub(n)) return '#06d6a0';
+      if (isPub(n)) return '#4cc9f0';
+      if (isDist(n)) return '#f72585';
+      return '#ffd166';
+    };
+
+    const allNodes = p.sankeyNodes;
+    const valOf = (n) => n.value || 0;
+    const sortDesc = (a, b) => valOf(b) - valOf(a) || a.name.localeCompare(b.name);
+    const sortAsc = (a, b) => valOf(a) - valOf(b) || a.name.localeCompare(b.name);
+    const subs = allNodes.filter(n => isSub(n.name)).sort(sortDesc);
+    const pubs = allNodes.filter(n => isPub(n.name)).sort(sortDesc);
+    const dists = allNodes.filter(n => isDist(n.name)).sort(sortDesc);
+    const decades = allNodes.filter(n => isDecade(n.name)).sort(sortDesc);
+    const ordered = [...subs, ...pubs, ...dists, ...decades];
+
+    const orderMap = new Map(ordered.map((n, i) => [n.name, i]));
+
+    const links = p.sankeyLinks
+      .filter(l => orderMap.has(l.source) && orderMap.has(l.target))
+      .map(l => ({ source: orderMap.get(l.source), target: orderMap.get(l.target), value: l.value }));
+
+    const nodes = ordered.map(n => ({
+      name: n.name,
+      value: n.value
+    }));
+
+    const width = el.clientWidth;
+    const height = 560;
+
+    const svg = d3.select(el).append('svg')
+      .attr('width', width)
+      .attr('height', height)
+      .style('overflow', 'visible');
+
+    svg.append('rect')
+      .attr('width', width)
+      .attr('height', height)
+      .attr('fill', '#0f1115');
+
+    svg.append('text')
+      .attr('x', width / 2)
+      .attr('y', 20)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '15px')
+      .attr('font-weight', '700')
+      .selectAll('tspan')
+      .data([
+        { text: 'Films Based on Video Games: ', fill: '#e6e9ef' },
+        { text: 'Subcategory', fill: '#06d6a0' },
+        { text: ' → ', fill: '#e6e9ef' },
+        { text: 'Game Publisher (top 10)', fill: '#4cc9f0' },
+        { text: ' → ', fill: '#e6e9ef' },
+        { text: 'Distributor (top 10)', fill: '#f72585' },
+        { text: ' → ', fill: '#e6e9ef' },
+        { text: 'Decade', fill: '#ffd166' }
+      ])
+      .join('tspan')
+      .attr('fill', d => d.fill)
+      .text(d => d.text);
+
+    const sankey = d3.sankey()
+      .nodeWidth(14)
+      .nodePadding(10)
+      .nodeAlign(d3.sankeyJustify)
+      .nodeSort((a, b) => (b.value || 0) - (a.value || 0) || a.name.localeCompare(b.name))
+      .extent([[1, 50], [width - 1 , height - 20]]);
+
+    const sankeyData = sankey({
+      nodes: nodes.map(d => ({ ...d })),
+      links: links.map(d => ({ ...d }))
+    });
+
+    const sNodes = sankeyData.nodes;
+    const sLinks = sankeyData.links;
+
+    const defs = svg.append('defs');
+
+    const link = svg.append('g')
+      .attr('fill', 'none')
+      .selectAll('g')
+      .data(sLinks)
+      .join('g')
+      .attr('stroke-opacity', 0.35)
+      .selectAll('path')
+      .data(d => [d])
+      .join('path')
+      .attr('d', d3.sankeyLinkHorizontal())
+      .attr('stroke-width', d => Math.max(1, d.width))
+      .attr('stroke', (d, i, nodes) => {
+        const id = 'link-gradient-' + (d.source.index || 0) + '-' + (d.target.index || 0) + '-' + i;
+        const grad = defs.append('linearGradient')
+          .attr('id', id)
+          .attr('gradientUnits', 'userSpaceOnUse')
+          .attr('x1', d.source.x1).attr('y1', (d.source.y0 + d.source.y1) / 2)
+          .attr('x2', d.target.x0).attr('y2', (d.target.y0 + d.target.y1) / 2);
+        grad.append('stop').attr('offset', '0%').attr('stop-color', colorFor(d.source.name));
+        grad.append('stop').attr('offset', '100%').attr('stop-color', colorFor(d.target.name));
+        return 'url(#' + id + ')';
+      });
+
+    const node = svg.append('g')
+      .selectAll('g')
+      .data(sNodes)
+      .join('g')
+      .attr('transform', d => `translate(${d.x0},${d.y0})`);
+
+    node.append('rect')
+      .attr('height', d => Math.max(1, d.y1 - d.y0))
+      .attr('width', sankey.nodeWidth())
+      .attr('fill', d => colorFor(d.name))
+      .attr('stroke', 'none');
+
+    node.append('text')
+      .attr('x', d => d.x0 < width / 2 ? sankey.nodeWidth() + 6 : -6)
+      .attr('y', d => (d.y1 - d.y0) / 2)
+      .attr('dy', '0.35em')
+      .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
+      .text(d => d.name)
+      .style('fill', '#e6e9ef')
+      .style('font-size', '12px')
+      .style('font-weight', '500')
+      .style('pointer-events', 'none');
+
+    sankeyChart = { svg, sankey, nodes: sNodes, links: sLinks };
+
+    const btn = document.getElementById('btnSankeySvg');
+    if (btn && !btn.dataset.wired) {
+      btn.dataset.wired = '1';
+      btn.addEventListener('click', () => {
+        if (!sankeyChart) return;
+        btn.disabled = true;
+        const prev = btn.innerHTML;
+        btn.innerHTML = '<span aria-hidden="true">…</span> Rendering…';
+        setTimeout(() => {
+          try {
+            const svgEl = sankeyChart.svg;
+            const serializer = new XMLSerializer();
+            let svgStr = serializer.serializeToString(svgEl.node());
+            const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sankey_' + new Date().toISOString().slice(0, 10) + '.svg';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch (err) {
+            console.error('SVG export failed:', err);
+            alert('Could not export the Sankey as SVG. See the console for details.');
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = prev;
+          }
+        }, 30);
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      if (!sankeyChart) return;
+      const w = el.clientWidth;
+      sankeyChart.svg.attr('width', w);
+    });
+  }
+
+  // ---------- Tabulator ----------
+  function buildTable(data) {
+    const cats = Array.from(new Set(data.map(r => r.category).filter(Boolean))).sort();
+    const sel = document.getElementById('filter-category');
+    cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+
+    const moneyFmt = (sym) => (c) => {
+      const v = c.getValue();
+      if (!v || v === 'NA') return '—';
+      const n = Number(String(v).replace(/[, ]/g, ''));
+      return isNaN(n) ? v : sym + (n/1e6).toFixed(1) + 'M';
+    };
+    const intFmt = (c) => {
+      const v = c.getValue();
+      if (v === undefined || v === null || v === '' || v === 'NA') return '—';
+      return v;
+    };
+    const yearFmt = (c) => {
+      const d = c.getValue(); if (!d || d === 'NA') return '—';
+      const dt = new Date(d); return isNaN(dt) ? d : dt.getFullYear();
+    };
+
+    const tbl = new Tabulator('#table', {
+      data: data,
+      layout: 'fitDataStretch',
+      pagination: 'local',
+      paginationSize: 15,
+      paginationSizeSelector: [10, 15, 25, 50, 100],
+      initialSort: [{ column: 'release_date', dir: 'desc' }],
+      columns: [
+        { title: 'Category', field: 'category', minWidth: 130, headerSort: true },
+        { title: 'Subcategory', field: 'subcategory', minWidth: 110, headerSort: true },
+        { title: 'Title', field: 'title', minWidth: 200, headerSort: true, frozen: true },
+        { title: 'Director', field: 'director', minWidth: 160, headerSort: true },
+        { title: 'Release Date', field: 'release_date', minWidth: 120, headerSort: true, formatter: yearFmt },
+        { title: 'Worldwide Box Office', field: 'worldwide_box_office', minWidth: 150, hozAlign: 'right', formatter: moneyFmt('$') },
+        { title: 'Rotten Tomatoes', field: 'rotten_tomatoes', width: 110, hozAlign: 'center' },
+        { title: 'Metacritic', field: 'metacritic', width: 100, hozAlign: 'center' },
+        { title: 'Cinema Score', field: 'cinema_score', width: 110, hozAlign: 'center' },
+        { title: 'Distributor', field: 'distributor', minWidth: 200, headerSort: true },
+        { title: 'Original Game Publisher', field: 'original_game_publisher', minWidth: 200, headerSort: true },
+        { title: 'Budget Low', field: 'budget_low', minWidth: 120, hozAlign: 'right', formatter: moneyFmt('$') },
+        { title: 'Budget High', field: 'budget_high', minWidth: 120, hozAlign: 'right', formatter: moneyFmt('$') },
+        { title: 'Subject', field: 'subject', minWidth: 140, headerSort: true },
+        { title: 'Network', field: 'network', minWidth: 140, headerSort: true },
+      ]
+    });
+
+    const applyFilter = () => {
+      const cat = sel.value;
+      const q = (document.getElementById('filter-search').value || '').toLowerCase().trim();
+      tbl.setFilter(row => {
+        if (cat && row.category !== cat) return false;
+        if (!q) return true;
+        const hay = [row.title, row.director, row.distributor, row.original_game_publisher, row.subcategory, row.network].join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+    };
+    sel.addEventListener('change', applyFilter);
+    document.getElementById('filter-search').addEventListener('input', applyFilter);
+  }
+  </script>
+</body>
+</html>
