@@ -1,0 +1,635 @@
+---
+title: Popular Baby Names in England and Wales
+author: Manish Datt
+date: '2026-06-16'
+description: Explore baby name popularity trends in England and Wales, northern Ireland, and Scotland from 1996 to 2025.
+image: baby_names.png
+categories:
+- D3js
+- TidyTuesday
+layout: false
+slug: 2663
+---
+
+<h2 class="text-2xl lg:text-3xl m-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baby Names — England & Wales</title>
+    <link href="https://unpkg.com/tabulator-tables@5.5/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+        }
+        .tabulator {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .tabulator .tabulator-header {
+            background: #f8fafc;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .tabulator .tabulator-header .tabulator-col {
+            background: #f8fafc !important;
+            border-right: 1px solid #e5e7eb;
+        }
+        .tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+            padding: 8px 12px;
+        }
+        .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 13px;
+        }
+        .tabulator .tabulator-row {
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .tabulator .tabulator-row:nth-child(even) {
+            background: #f8fafc;
+        }
+        .tabulator .tabulator-row:hover {
+            background: #e0f2fe;
+        }
+        .tabulator .tabulator-cell {
+            padding: 10px 12px;
+            color: #334155;
+        }
+        .tabulator-row.tabulator-selected {
+            background: #bae6fd !important;
+        }
+        .tabulator .tabulator-footer {
+            background: #f8fafc;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-slate-800 mb-2">Popular Baby Names in England and Wales</h1>
+            <p class="text-slate-600">Data from the Office for National Statistics covering 1996–2024. Browse, search, sort, and filter baby names by year, sex, and popularity rank.</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-slate-800 mb-1">Rank 1 Names Over Time</h2>
+            <p class="text-sm text-slate-500 mb-4">The most popular baby name each year, by sex. Bars are labeled with the name.</p>
+            <div id="chart-rank1" class="w-full"></div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+            <div class="flex items-center justify-between mb-1">
+                <h2 class="text-lg font-semibold text-slate-800">The Names That Defined a Generation</h2>
+                <button id="btn-download-svg" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                    Download SVG
+                </button>
+            </div>
+            <p class="text-sm text-slate-500 mb-4">Each silhouette is filled proportionally by the number of years each name held the #1 spot. Hover for details.</p>
+            <div id="infographic" class="grid grid-cols-1 md:grid-cols-3 gap-2"></div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-slate-800 mb-1">Browse the Data</h2>
+            <div class="flex flex-wrap items-end gap-4 mb-4">
+                <div>
+                    <label for="filter-year" class="block text-sm font-medium text-slate-700 mb-1">Year</label>
+                    <select id="filter-year" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="">All Years</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-sex" class="block text-sm font-medium text-slate-700 mb-1">Sex</label>
+                    <select id="filter-sex" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="">All</option>
+                        <option value="Boy">Boy</option>
+                        <option value="Girl">Girl</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-search" class="block text-sm font-medium text-slate-700 mb-1">Search Name</label>
+                    <input id="filter-search" type="text" placeholder="e.g. Oliver, Olivia…"
+                        class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-48">
+                </div>
+                <div>
+                    <label for="filter-rank" class="block text-sm font-medium text-slate-700 mb-1">Max Rank</label>
+                    <input id="filter-rank" type="number" min="1" placeholder="e.g. 100"
+                        class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-28">
+                </div>
+            </div>
+            <p id="row-count" class="text-sm text-slate-500"></p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div id="names-table"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/tabulator-tables@5.5/dist/js/tabulator.min.js"></script>
+    <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+
+    <script>
+    let table = null;
+    let ALL_DATA = [];
+    const REGION_DATA = {};
+    let loaded = 0;
+
+    function onAllLoaded() {
+        loaded++;
+        if (loaded < 3) return;
+        renderChart(ALL_DATA);
+        renderInfographic(REGION_DATA);
+        buildTable(ALL_DATA);
+    }
+
+    function loadCSV(file, key) {
+        Papa.parse(file, {
+            download: true,
+            header: true,
+            complete: function(results) {
+                const data = results.data.filter(r => r.Name && r.Year);
+                REGION_DATA[key] = data;
+                if (key === 'ew') {
+                    ALL_DATA = data;
+                    const years = [...new Set(data.map(r => r.Year))].sort();
+                    const yearSel = document.getElementById('filter-year');
+                    years.forEach(y => {
+                        const opt = document.createElement('option');
+                        opt.value = y;
+                        opt.textContent = y;
+                        yearSel.appendChild(opt);
+                    });
+                }
+                onAllLoaded();
+            },
+            error: function(err) { console.error('CSV parse error', file, err); }
+        });
+    }
+
+    loadCSV('england_wales_names.csv', 'ew');
+    loadCSV('ni_names.csv', 'ni');
+    loadCSV('scotland_names.csv', 'scotland');
+
+    function renderChart(data) {
+        const rank1 = data.filter(r => r.Rank === '1');
+        const byYear = d3.group(rank1, d => d.Year);
+        const chartData = [];
+        byYear.forEach((rows, year) => {
+            rows.forEach(r => {
+                chartData.push({ year: +r.Year, sex: r.Sex, name: r.Name, number: +r.Number });
+            });
+        });
+        chartData.sort((a, b) => a.year - b.year || a.sex.localeCompare(b.sex));
+
+        const el = document.getElementById('chart-rank1');
+        el.innerHTML = '';
+        const margin = { top: 30, right: 20, bottom: 80, left: 60 };
+        const width = el.clientWidth - margin.left - margin.right;
+        const height = 420 - margin.top - margin.bottom;
+
+        const svg = d3.select(el).append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom)
+            .append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        const years = [...new Set(chartData.map(d => d.year))].sort();
+        const x0 = d3.scaleBand().domain(years).range([0, width]).padding(0.25);
+        const x1 = d3.scaleBand().domain(['Boy', 'Girl']).range([0, x0.bandwidth()]).padding(0.08);
+
+        const maxNum = d3.max(chartData, d => d.number);
+        const y = d3.scaleLinear().domain([0, maxNum * 1.15]).range([height, 0]);
+
+        svg.append('g')
+            .attr('transform', `translate(0,${height})`)
+            .call(d3.axisBottom(x0).tickFormat(d3.format('d')))
+            .selectAll('text')
+            .attr('transform', 'rotate(-45)')
+            .style('text-anchor', 'end')
+            .style('font-size', '11px');
+
+        svg.append('g')
+            .call(d3.axisLeft(y).ticks(6).tickFormat(d3.format('~s')))
+            .selectAll('text')
+            .style('font-size', '11px');
+
+        svg.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -height / 2)
+            .attr('y', -45)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '13px')
+            .style('fill', '#475569')
+            .text('Number of Babies');
+
+        const color = d3.scaleOrdinal().domain(['Boy', 'Girl']).range(['#3b82f6', '#ec4899']);
+
+        const groups = svg.selectAll('.year-group')
+            .data(chartData)
+            .join('g')
+            .attr('class', 'year-group')
+            .attr('transform', d => `translate(${x0(d.year)},0)`);
+
+        groups.append('rect')
+            .attr('x', d => x1(d.sex))
+            .attr('y', d => y(d.number))
+            .attr('width', x1.bandwidth())
+            .attr('height', d => height - y(d.number))
+            .attr('fill', d => color(d.sex))
+            .attr('rx', 3);
+
+        groups.append('text')
+            .attr('x', d => x1(d.sex) + x1.bandwidth() / 2)
+            .attr('y', d => y(d.number) - 6)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '9px')
+            .style('font-weight', '600')
+            .style('fill', '#334155')
+            .text(d => d.name);
+
+        const legend = svg.append('g')
+            .attr('transform', `translate(${width - 120}, -10)`);
+
+        ['Boy', 'Girl'].forEach((sex, i) => {
+            const g = legend.append('g').attr('transform', `translate(${i * 60}, 0)`);
+            g.append('rect').attr('width', 12).attr('height', 12).attr('rx', 2).attr('fill', color(sex));
+            g.append('text').attr('x', 16).attr('y', 10).style('font-size', '12px').style('fill', '#475569').text(sex);
+        });
+    }
+
+    window.addEventListener('resize', () => {
+        renderChart(ALL_DATA);
+        renderInfographic(REGION_DATA);
+    });
+
+    document.getElementById('btn-download-svg').addEventListener('click', () => {
+        const container = document.getElementById('infographic');
+        const cols = container.querySelectorAll(':scope > div');
+        if (!cols.length) return;
+
+        const titleHeight = 35;
+        const gap = 30;
+        const regions = [];
+
+        cols.forEach(col => {
+            const title = col.querySelector('h3') ? col.querySelector('h3').textContent : '';
+            const svgs = col.querySelectorAll('svg');
+            const parts = [];
+            svgs.forEach(svg => {
+                const clone = svg.cloneNode(true);
+                const vb = clone.getAttribute('viewBox').split(' ').map(Number);
+                parts.push({ svg: clone, width: vb[2], height: vb[3] });
+            });
+            const colWidth = Math.max(...parts.map(p => p.width));
+            const colHeight = parts.reduce((sum, p) => sum + p.height, 0) + titleHeight;
+            regions.push({ title, parts, width: colWidth, height: colHeight });
+        });
+
+        const totalWidth = regions.reduce((sum, r) => sum + r.width, 0) + gap * (regions.length - 1);
+        const maxColHeight = Math.max(...regions.map(r => r.height));
+
+        const combined = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        combined.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        combined.setAttribute('viewBox', `0 0 ${totalWidth} ${maxColHeight}`);
+        combined.setAttribute('width', totalWidth);
+        combined.setAttribute('height', maxColHeight);
+
+        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        bg.setAttribute('width', totalWidth);
+        bg.setAttribute('height', maxColHeight);
+        bg.setAttribute('fill', '#ffffff');
+        combined.appendChild(bg);
+
+        let xOffset = 0;
+        regions.forEach(region => {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${xOffset},0)`);
+
+            if (region.parts.length >= 2) {
+                const boySvg = region.parts[0];
+                const girlSvg = region.parts[1];
+
+                const innerG1 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                while (boySvg.svg.firstChild) innerG1.appendChild(boySvg.svg.firstChild);
+                g.appendChild(innerG1);
+
+                const titleY = boySvg.height + titleHeight / 2 + 5;
+                const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                title.setAttribute('x', region.width / 2);
+                title.setAttribute('y', titleY);
+                title.setAttribute('text-anchor', 'middle');
+                title.setAttribute('font-size', '30');
+                title.setAttribute('font-weight', '700');
+                title.setAttribute('fill', '#1e293b');
+                title.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
+                title.textContent = region.title;
+                g.appendChild(title);
+
+                const innerG2 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                innerG2.setAttribute('transform', `translate(0,${boySvg.height + titleHeight})`);
+                while (girlSvg.svg.firstChild) innerG2.appendChild(girlSvg.svg.firstChild);
+                g.appendChild(innerG2);
+            }
+
+            combined.appendChild(g);
+            xOffset += region.width + gap;
+        });
+
+        const serializer = new XMLSerializer();
+        const svgStr = serializer.serializeToString(combined);
+        const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'baby_names_infographic.svg';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    function renderInfographic(regionData) {
+        const container = document.getElementById('infographic');
+        container.innerHTML = '';
+
+        const regions = [
+            { key: 'ew', title: 'England & Wales' },
+            { key: 'ni', title: 'Northern Ireland' },
+            { key: 'scotland', title: 'Scotland' }
+        ];
+
+        const palettes = {
+            Boy: ['#1e3a5f','#1e4d8c','#2563eb','#60a5fa','#93c5fd'],
+            Girl: ['#831843','#9d174d','#db2777','#f472b6','#fbcfe8']
+        };
+
+        const boyPath = 'M376 88C376 57.1 350.9 32 320 32C289.1 32 264 57.1 264 88C264 118.9 289.1 144 320 144C350.9 144 376 118.9 376 88zM400 300.7L446.3 363.1C456.8 377.3 476.9 380.3 491.1 369.7C505.3 359.1 508.3 339.1 497.7 324.9L427.2 229.9C402 196 362.3 176 320 176C277.7 176 238 196 212.8 229.9L142.3 324.9C131.8 339.1 134.7 359.1 148.9 369.7C163.1 380.3 183.1 377.3 193.7 363.1L240 300.7L240 576C240 593.7 254.3 608 272 608C289.7 608 304 593.7 304 576L304 416C304 407.2 311.2 400 320 400C328.8 400 336 407.2 336 416L336 576C336 593.7 350.3 608 368 608C385.7 608 400 593.7 400 576L400 300.7z';
+        const girlPath = 'M264 88C264 57.1 289.1 32 320 32C350.9 32 376 57.1 376 88C376 118.9 350.9 144 320 144C289.1 144 264 118.9 264 88zM240 448L214.2 448C203.3 448 195.6 437.3 199 426.9L242 297.9L193.7 363C183.2 377.2 163.1 380.2 148.9 369.6C134.7 359 131.7 339 142.3 324.8L212.8 229.8C238 196 277.7 176 320 176C362.3 176 402 196 427.2 229.9L497.7 324.9C508.2 339.1 505.3 359.1 491.1 369.7C476.9 380.3 456.9 377.3 446.3 363.1L398 298L441 426.9C444.5 437.3 436.7 448 425.8 448L400 448L400 576C400 593.7 385.7 608 368 608C350.3 608 336 593.7 336 576L336 448L304 448L304 576C304 593.7 289.7 608 272 608C254.3 608 240 593.7 240 576L240 448z';
+
+        function formatYears(years) {
+            const nums = years.map(Number).sort((a, b) => a - b);
+            const ranges = [];
+            let start = nums[0], prev = nums[0];
+            for (let i = 1; i < nums.length; i++) {
+                if (nums[i] === prev + 1) { prev = nums[i]; }
+                else { ranges.push(start === prev ? '' + start : start + '-' + prev); start = prev = nums[i]; }
+            }
+            ranges.push(start === prev ? '' + start : start + '-' + prev);
+            return ranges.join(', ');
+        }
+
+        function buildSilhouette(data, sex, clipId, regionKey) {
+            const rank1 = data.filter(r => r.Rank === '1');
+            const totalYears = new Set(rank1.map(r => r.Year)).size;
+
+            const names = {};
+            rank1.filter(r => r.Sex === sex).forEach(r => {
+                if (!names[r.Name]) names[r.Name] = [];
+                names[r.Name].push(r.Year);
+            });
+
+            const sorted = Object.entries(names)
+                .map(([name, years]) => ({ name, years: years.sort(), count: years.length }))
+                .sort((a, b) => b.count - a.count);
+
+            const palette = palettes[sex];
+            let yPos = 0;
+            const bands = sorted.map((d, i) => {
+                const h = totalYears > 0 ? (d.count / totalYears) * 576 : 0;
+                const band = { ...d, y: yPos, h, color: palette[i % palette.length] };
+                yPos += h;
+                return band;
+            });
+
+            const silhouette = sex === 'Boy' ? boyPath : girlPath;
+
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 640 700');
+            svg.setAttribute('width', '100%');
+            svg.style.maxWidth = '280px';
+            svg.style.overflow = 'visible';
+
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const clip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+            clip.setAttribute('id', clipId);
+            const clipPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            clipPath.setAttribute('d', silhouette);
+            clip.appendChild(clipPath);
+            defs.appendChild(clip);
+            svg.appendChild(defs);
+
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('clip-path', 'url(#' + clipId + ')');
+
+            bands.forEach(band => {
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', '-10');
+                rect.setAttribute('y', band.y + 32);
+                rect.setAttribute('width', '660');
+                rect.setAttribute('height', Math.max(band.h, 1));
+                rect.setAttribute('fill', band.color);
+                g.appendChild(rect);
+
+                const yearsStr = formatYears(band.years);
+
+                const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                titleEl.textContent = band.name + ': ' + band.count + ' year' + (band.count > 1 ? 's' : '') + ' at #1 (' + band.years.join(', ') + ')';
+                rect.appendChild(titleEl);
+            });
+
+            svg.appendChild(g);
+
+            if (sorted.length > 0) {
+                const topName = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                topName.setAttribute('x', '320');
+                topName.setAttribute('y', '94');
+                topName.setAttribute('text-anchor', 'middle');
+                topName.setAttribute('font-size', '28');
+                topName.setAttribute('font-weight', '700');
+                topName.setAttribute('fill', '#ffffff');
+                topName.setAttribute('pointer-events', 'none');
+                topName.textContent = sorted[0].name;
+                svg.appendChild(topName);
+            }
+
+            let sideIdx = 0;
+            bands.forEach(band => {
+                const onRight = band.count > 2 || sideIdx % 2 === 0;
+                if (band.count <= 2) sideIdx++;
+
+                const lx = onRight ? 420 : 220;
+                let ly = band.y + 32 + Math.max(band.h / 2, 8) + 6;
+                if (regionKey === 'scotland' && sex === 'Boy' && band.name === 'Jack') ly += 40;
+                if (regionKey === 'scotland' && sex === 'Boy' && band.name === 'Andrew') ly += 15;
+                if (regionKey === 'ni' && sex === 'Girl' && band.name === 'Katie') ly += 20;
+                if (regionKey === 'ni' && sex === 'Boy' && band.name === 'Jack') ly -= 10;
+                if (regionKey === 'ni' && sex === 'Girl' && band.name === 'Grace') ly += 50;
+                if (regionKey === 'scotland' && sex === 'Boy' && band.name === 'David') ly += 25;
+                if (regionKey === 'scotland' && sex === 'Girl' && band.name === 'Laura') ly += 65;
+                if (regionKey === 'ew' && sex === 'Girl' && band.name === 'Olivia') ly += 5;
+
+                const isTop = sorted.length > 0 && band.name === sorted[0].name;
+
+                if (!isTop) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    if (onRight) {
+                        line.setAttribute('x1', lx);
+                        line.setAttribute('y1', ly - 4);
+                        line.setAttribute('x2', lx + 20);
+                        line.setAttribute('y2', ly - 4);
+                    } else {
+                        line.setAttribute('x1', lx + 40);
+                        line.setAttribute('y1', ly - 4);
+                        line.setAttribute('x2', lx + 20);
+                        line.setAttribute('y2', ly - 4);
+                    }
+                    line.setAttribute('stroke', '#94a3b8');
+                    line.setAttribute('stroke-width', '1.5');
+                    svg.appendChild(line);
+                }
+
+                const yearsStr = formatYears(band.years);
+                let textX = onRight ? lx + 24 : lx + 16;
+                if (regionKey === 'ew' && sex === 'Girl' && band.name === 'Chloe') textX += 60;
+                if (regionKey === 'ni' && sex === 'Girl' && band.name === 'Chloe') textX += 20;
+                if (regionKey === 'scotland' && sex === 'Girl' && band.name === 'Emma') { textX += 20; ly -= 25; }
+                const anchor = onRight ? 'start' : 'end';
+
+                if (band.count > 2 && !isTop) {
+                    const textName = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    textName.setAttribute('x', textX);
+                    textName.setAttribute('y', ly);
+                    textName.setAttribute('text-anchor', anchor);
+                    textName.setAttribute('font-size', '20');
+                    textName.setAttribute('font-weight', '600');
+                    textName.setAttribute('fill', '#475569');
+                    textName.textContent = band.name;
+                    svg.appendChild(textName);
+
+                    const textYears = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    textYears.setAttribute('x', textX);
+                    textYears.setAttribute('y', ly + 20);
+                    textYears.setAttribute('text-anchor', anchor);
+                    textYears.setAttribute('font-size', '16');
+                    textYears.setAttribute('fill', '#64748b');
+                    textYears.textContent = '(' + yearsStr + ')';
+                    svg.appendChild(textYears);
+                } else if (band.count > 2 && isTop) {
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', '320');
+                    text.setAttribute('y', ly);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('font-size', '16');
+                    text.setAttribute('fill', '#64748b');
+                    text.textContent = '(' + yearsStr + ')';
+                    svg.appendChild(text);
+                } else {
+                    const textName = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    textName.setAttribute('x', textX);
+                    textName.setAttribute('y', ly);
+                    textName.setAttribute('text-anchor', anchor);
+                    textName.setAttribute('font-size', '20');
+                    textName.setAttribute('font-weight', '700');
+                    textName.setAttribute('fill', '#475569');
+                    textName.textContent = band.name;
+                    svg.appendChild(textName);
+
+                    const textYears = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    textYears.setAttribute('x', textX);
+                    textYears.setAttribute('y', ly + 18);
+                    textYears.setAttribute('text-anchor', anchor);
+                    textYears.setAttribute('font-size', '16');
+                    textYears.setAttribute('fill', '#64748b');
+                    textYears.textContent = '(' + yearsStr + ')';
+                    svg.appendChild(textYears);
+                }
+            });
+
+            return svg;
+        }
+
+        regions.forEach(region => {
+            const data = regionData[region.key];
+            if (!data) return;
+
+            const col = document.createElement('div');
+            col.className = 'flex flex-col items-center';
+
+            const h3 = document.createElement('h3');
+            h3.className = 'text-base font-semibold text-slate-700 mb-2 text-center';
+            h3.textContent = region.title;
+            col.appendChild(h3);
+
+            const boySvg = buildSilhouette(data, 'Boy', 'clip-' + region.key + '-Boy', region.key);
+            col.appendChild(boySvg);
+
+            const girlSvg = buildSilhouette(data, 'Girl', 'clip-' + region.key + '-Girl', region.key);
+            col.appendChild(girlSvg);
+
+            container.appendChild(col);
+        });
+    }
+
+    function buildTable(data) {
+        const numFmt = (c) => {
+            const v = c.getValue();
+            return v ? Number(v).toLocaleString() : '—';
+        };
+
+        table = new Tabulator('#names-table', {
+            data: data,
+            layout: 'fitDataStretch',
+            pagination: 'local',
+            paginationSize: 25,
+            paginationSizeSelector: [10, 25, 50, 100],
+            initialSort: [{ column: 'Number', dir: 'desc' }],
+            columns: [
+                { title: 'Year', field: 'Year', width: 90, hozAlign: 'center', headerSort: true },
+                { title: 'Sex', field: 'Sex', width: 80, hozAlign: 'center', headerSort: true },
+                { title: 'Name', field: 'Name', minWidth: 160, headerSort: true },
+                { title: 'Number', field: 'Number', width: 110, hozAlign: 'right', formatter: numFmt, headerSort: true },
+                { title: 'Rank', field: 'Rank', width: 90, hozAlign: 'right', formatter: numFmt, headerSort: true },
+            ],
+            rowFormatter: function(row) {
+                const sex = row.getData().Sex;
+                if (sex === 'Girl') {
+                    row.getElement().style.backgroundColor = '#fdf2f8';
+                }
+            }
+        });
+
+        updateCount(data.length);
+
+        function applyFilters() {
+            const year = document.getElementById('filter-year').value;
+            const sex = document.getElementById('filter-sex').value;
+            const search = document.getElementById('filter-search').value.toLowerCase().trim();
+            const maxRank = document.getElementById('filter-rank').value;
+
+            table.setFilter(function(row) {
+                if (year && row.Year !== year) return false;
+                if (sex && row.Sex !== sex) return false;
+                if (search && !row.Name.toLowerCase().includes(search)) return false;
+                if (maxRank && row.Rank && Number(row.Rank) > Number(maxRank)) return false;
+                return true;
+            });
+            updateCount(table.getDataCount('active'));
+        }
+
+        function updateCount(n) {
+            document.getElementById('row-count').textContent = n.toLocaleString() + ' rows displayed';
+        }
+
+        document.getElementById('filter-year').addEventListener('change', applyFilters);
+        document.getElementById('filter-sex').addEventListener('change', applyFilters);
+        document.getElementById('filter-search').addEventListener('input', applyFilters);
+        document.getElementById('filter-rank').addEventListener('input', applyFilters);
+    }
+    </script>
+</body>
+</html>
