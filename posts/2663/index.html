@@ -293,22 +293,37 @@ slug: 2663
         const totalWidth = regions.reduce((sum, r) => sum + r.width, 0) + gap * (regions.length - 1);
         const maxColHeight = Math.max(...regions.map(r => r.height));
 
+        const mainTitle = 'Rank #1 baby names over the years';
+        const titleFontSize = 48;
+        const titlePadding = 60;
+
         const combined = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         combined.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        combined.setAttribute('viewBox', `0 0 ${totalWidth} ${maxColHeight}`);
+        combined.setAttribute('viewBox', `0 0 ${totalWidth} ${maxColHeight + titlePadding}`);
         combined.setAttribute('width', totalWidth);
-        combined.setAttribute('height', maxColHeight);
+        combined.setAttribute('height', maxColHeight + titlePadding);
 
         const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         bg.setAttribute('width', totalWidth);
-        bg.setAttribute('height', maxColHeight);
+        bg.setAttribute('height', maxColHeight + titlePadding);
         bg.setAttribute('fill', '#ffffff');
         combined.appendChild(bg);
+
+        const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        titleEl.setAttribute('x', totalWidth / 2);
+        titleEl.setAttribute('y', titleFontSize + 10);
+        titleEl.setAttribute('text-anchor', 'middle');
+        titleEl.setAttribute('font-size', titleFontSize);
+        titleEl.setAttribute('font-weight', '700');
+        titleEl.setAttribute('fill', '#1e293b');
+        titleEl.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
+        titleEl.textContent = mainTitle;
+        combined.appendChild(titleEl);
 
         let xOffset = 0;
         regions.forEach(region => {
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.setAttribute('transform', `translate(${xOffset},0)`);
+            g.setAttribute('transform', `translate(${xOffset},${titlePadding})`);
 
             if (region.parts.length >= 2) {
                 const boySvg = region.parts[0];
