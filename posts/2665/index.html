@@ -1,0 +1,493 @@
+---
+title: Wreck Inventory of Ireland
+author: Manish Datt
+date: '2026-06-30'
+description: Top names in the wreck inventory data for Ireland.
+image: wreck_names.png
+categories:
+- D3js
+- TidyTuesday
+layout: false
+slug: 2665
+---
+
+<html lang="en">
+<h2 class="text-2xl lg:text-3xl m-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wreck Inventory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  </head>
+  <body class="min-h-screen bg-zinc-50 text-zinc-950">
+    <main class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+      <header class="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 class="mt-1 text-3xl font-semibold tracking-normal text-zinc-950">Wreck Inventory</h1>
+          <p id="summary" class="mt-2 text-sm text-zinc-600">Loading wreck_inventory.csv...</p>
+        </div>
+        <div class="flex flex-col gap-2 sm:w-80">
+          <label for="search" class="text-sm font-medium text-zinc-700">Search records</label>
+          <input
+            id="search"
+            type="search"
+            placeholder="Name, place, year, classification..."
+            class="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none ring-teal-600/20 transition focus:border-teal-700 focus:ring-4"
+            disabled
+          />
+        </div>
+      </header>
+
+      <section class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+          <h2 class="text-lg font-semibold text-zinc-950">Top recurring wreck names</h2>
+          <div class="flex items-center gap-3">
+            <button
+              id="download-svg"
+              type="button"
+              class="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100"
+            >
+              Download SVG
+            </button>
+            <p class="text-sm text-zinc-600">Frequency calculated from the wreck name column.</p>
+          </div>
+        </div>
+        <div id="bar-chart" class="mt-4"></div>
+        <div class="mt-4 overflow-x-auto">
+          <table class="min-w-full divide-y divide-zinc-200 text-left text-sm">
+            <thead class="bg-zinc-100 text-xs uppercase tracking-wide text-zinc-600">
+              <tr>
+                <th scope="col" class="w-16 px-4 py-3 font-semibold">Rank</th>
+                <th scope="col" class="px-4 py-3 font-semibold">Wreck name</th>
+                <th scope="col" class="w-32 px-4 py-3 text-right font-semibold">Frequency</th>
+              </tr>
+            </thead>
+            <tbody id="name-frequency-body" class="divide-y divide-zinc-100 bg-white">
+              <tr>
+                <td colspan="3" class="px-4 py-6 text-center text-sm text-zinc-500">Calculating frequencies...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-zinc-200 text-left text-sm">
+            <thead id="table-head" class="bg-zinc-100 text-xs uppercase tracking-wide text-zinc-600"></thead>
+            <tbody id="table-body" class="divide-y divide-zinc-100 bg-white"></tbody>
+          </table>
+        </div>
+        <div class="flex flex-col gap-3 border-t border-zinc-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p id="page-status" class="text-sm text-zinc-600">Preparing table...</p>
+          <div class="flex items-center gap-2">
+            <button
+              id="prev"
+              type="button"
+              class="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled
+            >
+              Previous
+            </button>
+            <button
+              id="next"
+              type="button"
+              class="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const csvPath = "wreck_inventory.csv";
+      const pageSize = 10;
+      const state = {
+        rows: [],
+        filteredRows: [],
+        columns: [],
+        page: 1,
+        query: "",
+      };
+
+      const summary = document.querySelector("#summary");
+      const searchInput = document.querySelector("#search");
+      const nameFrequencyBody = document.querySelector("#name-frequency-body");
+      const tableHead = document.querySelector("#table-head");
+      const tableBody = document.querySelector("#table-body");
+      const pageStatus = document.querySelector("#page-status");
+      const prevButton = document.querySelector("#prev");
+      const nextButton = document.querySelector("#next");
+
+      const columnLabels = {
+        date: "Date",
+        year: "Year",
+        wreck_name: "Wreck name",
+        wreck_no: "Wreck no.",
+        classification: "Classification",
+        description: "Description",
+        descriptive_date: "Descriptive date",
+        place_of_loss: "Place of loss",
+        latitude: "Latitude",
+        longitude: "Longitude",
+        source_of_co_ordinate: "Coordinate source",
+      };
+
+      function labelFor(column) {
+        return columnLabels[column] || column.replaceAll("_", " ");
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function cleanValue(value) {
+        return value === "NA" || value == null ? "" : value;
+      }
+
+      function renderHeader() {
+        tableHead.innerHTML = `
+          <tr>
+            ${state.columns
+              .map(
+                (column) =>
+                  `<th scope="col" class="whitespace-nowrap px-4 py-3 font-semibold">${escapeHtml(labelFor(column))}</th>`
+              )
+              .join("")}
+          </tr>
+        `;
+      }
+
+      function getTopWreckNameFrequencies(limit = 11) {
+        const counts = new Map();
+
+        state.rows.forEach((row) => {
+          const name = String(row.wreck_name ?? "").trim();
+          if (!name || name.toUpperCase() === "NA") {
+            return;
+          }
+
+          counts.set(name, (counts.get(name) || 0) + 1);
+        });
+
+        return [...counts.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, limit);
+      }
+
+      function renderNameFrequencies() {
+        const topNames = getTopWreckNameFrequencies(11);
+
+        if (!topNames.length) {
+          nameFrequencyBody.innerHTML = `
+            <tr>
+              <td colspan="3" class="px-4 py-6 text-center text-sm text-zinc-500">
+                No wreck names available for frequency calculation.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        nameFrequencyBody.innerHTML = topNames
+          .map(
+            ([name, frequency], index) => `
+              <tr class="transition hover:bg-teal-50/60">
+                <td class="px-4 py-3 font-medium text-zinc-600">${index + 1}</td>
+                <td class="px-4 py-3 font-medium text-zinc-900">${escapeHtml(name)}</td>
+                <td class="px-4 py-3 text-right tabular-nums text-zinc-800">${frequency.toLocaleString()}</td>
+              </tr>
+            `
+          )
+          .join("");
+      }
+
+      let shipSvgMarkup = "";
+
+      async function loadShipIcon() {
+        const resp = await fetch("ship-svgrepo-com.svg");
+        shipSvgMarkup = await resp.text();
+      }
+
+      function makeShipIcon(fill) {
+        const wrapper = document.createElement("span");
+        wrapper.innerHTML = shipSvgMarkup;
+        const svg = wrapper.firstElementChild;
+        svg.setAttribute("width", "24");
+        svg.setAttribute("height", "24");
+        svg.style.fill = fill;
+        svg.style.stroke = "none";
+        return svg;
+      }
+
+      function renderBarChart() {
+        const data = getTopWreckNameFrequencies(11)
+          .filter(([name]) => name.toUpperCase() !== "UNKNOWN")
+          .slice(0, 10);
+
+        if (!data.length || !shipSvgMarkup) return;
+
+        const container = document.getElementById("bar-chart");
+        container.className = "relative";
+        container.innerHTML = "";
+
+        data.forEach(([name, frequency]) => {
+          const fullIcons = Math.floor(frequency / 10);
+          const remainder = frequency % 10;
+          const hasPartial = remainder > 0;
+          const totalIcons = fullIcons + (hasPartial ? 1 : 0);
+
+          const row = document.createElement("div");
+          row.className = "flex items-center gap-1 py-1.5";
+
+          const label = document.createElement("span");
+          label.className = "shrink-0 w-24 truncate text-base font-medium text-zinc-900";
+          label.textContent = name;
+          label.title = name;
+
+          const icons = document.createElement("span");
+          icons.className = "flex flex-wrap items-center gap-0.5";
+
+          for (let i = 0; i < totalIcons; i++) {
+            const isLastPartial = i === totalIcons - 1 && hasPartial;
+
+            if (isLastPartial) {
+              const clipWrap = document.createElement("span");
+              clipWrap.style.cssText = "display:inline-block;width:24px;height:24px;position:relative;";
+
+              const bg = makeShipIcon("#d1d5db");
+              bg.style.cssText = "position:absolute;top:0;left:0;width:24px;height:24px;fill:#d1d5db;stroke:none;";
+
+              const fg = makeShipIcon("#0d9488");
+              const clipWidth = (remainder / 10) * 24;
+              fg.style.cssText = `position:absolute;top:0;left:0;width:24px;height:24px;fill:#0d9488;stroke:none;clip-path:inset(0 ${24 - clipWidth}px 0 0);`;
+
+              clipWrap.appendChild(bg);
+              clipWrap.appendChild(fg);
+              icons.appendChild(clipWrap);
+            } else {
+              icons.appendChild(makeShipIcon("#0d9488"));
+            }
+          }
+
+          const count = document.createElement("span");
+          count.className = "ml-2 shrink-0 text-sm tabular-nums text-zinc-500";
+          count.textContent = frequency.toLocaleString();
+
+          row.appendChild(label);
+          row.appendChild(icons);
+          row.appendChild(count);
+          container.appendChild(row);
+        });
+
+        const caption = document.createElement("span");
+        caption.style.cssText = "position:absolute;left:40%;top:70%;transform:translate(-50%,-50%);font-size:1.25rem;color:#0d9488;";
+        caption.innerHTML = "Top 10 wreck names in the<br>Wreck Inventory of Ireland";
+        container.appendChild(caption);
+      }
+      function renderRows() {
+        const start = (state.page - 1) * pageSize;
+        const rows = state.filteredRows.slice(start, start + pageSize);
+
+        if (!rows.length) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="${state.columns.length || 1}" class="px-4 py-10 text-center text-sm text-zinc-500">
+                No matching wreck records found.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tableBody.innerHTML = rows
+          .map(
+            (row) => `
+              <tr class="align-top transition hover:bg-teal-50/60">
+                ${state.columns
+                  .map((column) => {
+                    const value = escapeHtml(cleanValue(row[column]));
+                    const isDescription = column === "description";
+                    return `<td class="px-4 py-3 ${isDescription ? "min-w-[32rem] max-w-3xl leading-6 text-zinc-700" : "whitespace-nowrap text-zinc-800"}">${value}</td>`;
+                  })
+                  .join("")}
+              </tr>
+            `
+          )
+          .join("");
+      }
+
+      function renderPagination() {
+        const total = state.filteredRows.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const start = total ? (state.page - 1) * pageSize + 1 : 0;
+        const end = Math.min(state.page * pageSize, total);
+
+        pageStatus.textContent = `${start}-${end} of ${total.toLocaleString()} records`;
+        prevButton.disabled = state.page <= 1;
+        nextButton.disabled = state.page >= totalPages;
+      }
+
+      function render() {
+        renderRows();
+        renderPagination();
+      }
+
+      function applyFilter() {
+        const query = state.query.trim().toLowerCase();
+        state.filteredRows = query
+          ? state.rows.filter((row) =>
+              state.columns.some((column) => String(row[column] ?? "").toLowerCase().includes(query))
+            )
+          : [...state.rows];
+
+        state.page = 1;
+        summary.textContent = `${state.filteredRows.length.toLocaleString()} of ${state.rows.length.toLocaleString()} wreck records shown.`;
+        render();
+      }
+
+      async function loadCsv() {
+        await loadShipIcon();
+        Papa.parse(csvPath, {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+          complete(results) {
+            state.rows = results.data;
+            state.filteredRows = [...results.data];
+            state.columns = results.meta.fields || Object.keys(results.data[0] || {});
+
+            renderHeader();
+            renderNameFrequencies();
+            renderBarChart();
+            render();
+
+            searchInput.disabled = false;
+            summary.textContent = `${state.rows.length.toLocaleString()} wreck records loaded from ${csvPath}.`;
+          },
+          error(error) {
+            summary.textContent = `Could not load ${csvPath}. Start a local web server, then open this page from that server.`;
+            pageStatus.textContent = error.message;
+          },
+        });
+      }
+
+      searchInput.addEventListener("input", (event) => {
+        state.query = event.target.value;
+        applyFilter();
+      });
+
+      prevButton.addEventListener("click", () => {
+        state.page = Math.max(1, state.page - 1);
+        render();
+      });
+
+      nextButton.addEventListener("click", () => {
+        const totalPages = Math.max(1, Math.ceil(state.filteredRows.length / pageSize));
+        state.page = Math.min(totalPages, state.page + 1);
+        render();
+      });
+
+      document.getElementById("download-svg").addEventListener("click", () => {
+        const data = getTopWreckNameFrequencies(11)
+          .filter(([n]) => n.toUpperCase() !== "UNKNOWN")
+          .slice(0, 10);
+        if (!data.length) return;
+
+        const chartEl = document.getElementById("bar-chart");
+        const parser = new DOMParser();
+        const shipDoc = parser.parseFromString(shipSvgMarkup, "image/svg+xml");
+        const pathD = (shipDoc.querySelector("path")?.getAttribute("d") || "").replace(/\s+/g, " ").trim();
+        const rectEls = [...shipDoc.querySelectorAll("rect")];
+        const rectStr = rectEls.map(r =>
+          `<rect width="${r.getAttribute("width")}" x="${r.getAttribute("x")}" y="${r.getAttribute("y")}" height="${r.getAttribute("height")}"/>`
+        ).join("");
+
+        const labelEl = chartEl.querySelector("span.shrink-0");
+        const labelW = labelEl ? labelEl.offsetWidth : 96;
+        const iconW = 24, iconH = 24, gap = 8, rowH = 30, pad = 12;
+        const maxIcons = Math.ceil(data[0][1] / 10);
+        const svgW = pad + labelW + gap + maxIcons * (iconW + gap) + 50 + pad;
+        const svgH = pad + data.length * rowH + pad;
+        const sc = iconW / 490;
+
+        let defs = "";
+        let clipIdx = 0;
+        let content = "";
+        data.forEach(([name, frequency], i) => {
+          const baseY = pad + i * rowH;
+          const textY = baseY + rowH / 2;
+          const full = Math.floor(frequency / 10);
+          const rem = frequency % 10;
+          const total = full + (rem > 0 ? 1 : 0);
+
+          content += `<text x="${pad + labelW}" y="${textY}" dy="0.35em" text-anchor="end" font-family="system-ui,sans-serif" font-size="14" font-weight="500" fill="#18181b">${escapeHtml(name)}</text>`;
+
+          const iconBaseX = pad + labelW + gap;
+          for (let j = 0; j < total; j++) {
+            const x = iconBaseX + j * (iconW + gap);
+            const iconY = baseY + (rowH - iconH) / 2;
+            const isPartial = j === total - 1 && rem > 0;
+
+            if (isPartial) {
+              const pct = rem / 10;
+              const clipW = Math.round(iconW * (1 - pct));
+              const clipId = `c${clipIdx++}`;
+              defs += `<clipPath id="${clipId}"><rect x="0" y="0" width="${iconW - clipW}" height="${iconH}"/></clipPath>`;
+              content += `<g transform="translate(${x},${iconY})"><g transform="scale(${sc})" fill="#d1d5db"><path d="${pathD}"/>${rectStr}</g></g>`;
+              content += `<g transform="translate(${x},${iconY})" clip-path="url(#${clipId})"><g transform="scale(${sc})" fill="#0d9488"><path d="${pathD}"/>${rectStr}</g></g>`;
+            } else {
+              content += `<g transform="translate(${x},${iconY})"><g transform="scale(${sc})" fill="#0d9488"><path d="${pathD}"/>${rectStr}</g></g>`;
+            }
+          }
+
+          const countX = iconBaseX + total * (iconW + gap) + 4;
+          content += `<text x="${countX}" y="${textY + 1}" font-family="system-ui,sans-serif" font-size="14" fill="#71717a">${frequency}</text>`;
+        });
+
+        const captionEl = chartEl.querySelector(":scope > span");
+        if (captionEl) {
+          const capR = captionEl.getBoundingClientRect();
+          const chartR = chartEl.getBoundingClientRect();
+          const capStyle = getComputedStyle(captionEl);
+          const cx = Math.round(capR.left - chartR.left + pad + capR.width / 2);
+          const cy = Math.round(capR.top - chartR.top + pad + capR.height / 2);
+          const capFont = capStyle.fontFamily.replace(/"/g, "'");
+          const lines = captionEl.innerHTML.split("<br>");
+          if (lines.length > 1) {
+            const lineH = parseFloat(capStyle.fontSize) * 1.2;
+            content += `<text x="${cx}" y="${cy - lineH / 2}" text-anchor="middle" font-family="${capFont}" font-size="${capStyle.fontSize}" fill="${capStyle.color}">`;
+            lines.forEach((line, li) => {
+              content += `<tspan x="${cx}" dy="${li === 0 ? 0 : lineH}">${line.trim()}</tspan>`;
+            });
+            content += `</text>`;
+          } else {
+            content += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-family="${capFont}" font-size="${capStyle.fontSize}" fill="${capStyle.color}">${captionEl.textContent}</text>`;
+          }
+        }
+
+        const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}"><rect width="${svgW}" height="${svgH}" fill="white"/><defs>${defs}</defs>${content}</svg>`;
+        const blob = new Blob([svgStr], { type: "image/svg+xml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "wreck-name-frequencies.svg";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      loadCsv();
+    </script>
+  </body>
+</html>
+
