@@ -1,0 +1,464 @@
+---
+title: UFC Athletes and Fight Data
+author: Manish Datt
+date: '2026-07-07'
+description: AI-assisted categorization of UFC athlete nicknames.
+image: nickname_categories.png
+categories:
+- D3js
+- TidyTuesday
+layout: false
+slug: 2671
+---
+
+<h2 class="text-2xl lg:text-3xl m-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UFC Athletes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800">
+  <div class="max-w-7xl mx-auto p-4 sm:p-6">
+    <header class="mb-4">
+      <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">UFC Athletes</h1>
+      <p id="count" class="text-sm text-slate-500 mt-1"></p>
+    </header>
+
+    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+      <input
+        id="search"
+        type="text"
+        placeholder="Search athletes..."
+        class="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <select
+        id="statusFilter"
+        class="px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">All statuses</option>
+      </select>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div class="overflow-x-auto max-h-[75vh]">
+        <table id="table" class="min-w-full divide-y divide-slate-200 text-sm">
+          <thead id="thead" class="bg-slate-50 sticky top-0 z-10"></thead>
+          <tbody id="tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <div id="loading" class="p-8 text-center text-slate-500">Loading data…</div>
+      <div id="pagination" class="hidden flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 text-sm">
+        <span id="pageInfo" class="text-slate-500"></span>
+        <div class="flex items-center gap-1">
+          <button id="firstBtn" class="px-3 py-1 rounded border border-slate-300 hover:bg-slate-50 disabled:opacity-40">«</button>
+          <button id="prevBtn" class="px-3 py-1 rounded border border-slate-300 hover:bg-slate-50 disabled:opacity-40">Prev</button>
+          <button id="nextBtn" class="px-3 py-1 rounded border border-slate-300 hover:bg-slate-50 disabled:opacity-40">Next</button>
+          <button id="lastBtn" class="px-3 py-1 rounded border border-slate-300 hover:bg-slate-50 disabled:opacity-40">»</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="mt-10">
+      <div class="flex items-center justify-end">
+        <button id="downloadSvg"
+          class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          Download SVG
+        </button>
+      </div>
+      <p class="text-sm text-slate-500 mt-1">
+        Counts of unique nicknames grouped by theme. The "other" bucket is excluded.
+        Main categories (animal/place/object) are taken from all 1527 nicknames; the
+        sub-categories are derived from the "other" bucket. Up to 20 example nicknames
+        shown per category.
+      </p>
+
+      <div id="viz" class="mt-4 bg-white rounded-xl shadow p-4 overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <script>
+    const CSV_URL = "ufc_athletes.csv";
+    const PAGE_SIZE = 10;
+    let allRows = [];
+    let filteredRows = [];
+    let columns = [];
+    let currentPage = 1;
+
+    function isNumeric(v) {
+      if (v === null || v === undefined || v === "") return false;
+      return !isNaN(parseFloat(v)) && isFinite(v);
+    }
+
+    function renderHeader() {
+      const thead = document.getElementById("thead");
+      thead.innerHTML = "";
+      const headRow = document.createElement("tr");
+      columns.forEach((col, i) => {
+        const th = document.createElement("th");
+        th.className = "px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap cursor-pointer select-none hover:bg-slate-100";
+        th.textContent = col;
+        th.onclick = () => sortBy(i);
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+    }
+
+    function render(rows) {
+      const tbody = document.getElementById("tbody");
+      tbody.innerHTML = "";
+
+      const frag = document.createDocumentFragment();
+      rows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-50";
+        columns.forEach((col) => {
+          const td = document.createElement("td");
+          td.className = "px-3 py-1.5 whitespace-nowrap";
+          let val = r[col];
+          if (col === "url" && val) {
+            const a = document.createElement("a");
+            a.href = val;
+            a.target = "_blank";
+            a.className = "text-blue-600 hover:underline";
+            a.textContent = "link";
+            td.appendChild(a);
+          } else {
+            td.textContent = val === undefined || val === null ? "" : val;
+          }
+          tr.appendChild(td);
+        });
+        frag.appendChild(tr);
+      });
+      tbody.appendChild(frag);
+
+      document.getElementById("count").textContent =
+        filteredRows.length + " of " + allRows.length + " athletes";
+    }
+
+    function totalPages() {
+      return Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+    }
+
+    function renderPage() {
+      const tp = totalPages();
+      if (currentPage > tp) currentPage = tp;
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const slice = filteredRows.slice(start, start + PAGE_SIZE);
+      render(slice);
+      renderPagination(tp, start);
+    }
+
+    function renderPagination(tp, start) {
+      const pag = document.getElementById("pagination");
+      const info = document.getElementById("pageInfo");
+      if (filteredRows.length === 0) {
+        pag.classList.add("hidden");
+        return;
+      }
+      pag.classList.remove("hidden");
+      const end = Math.min(start + PAGE_SIZE, filteredRows.length);
+      info.textContent = "Showing " + (start + 1) + "–" + end +
+        " of " + filteredRows.length + "  (page " + currentPage + "/" + tp + ")";
+      document.getElementById("firstBtn").disabled = currentPage === 1;
+      document.getElementById("prevBtn").disabled = currentPage === 1;
+      document.getElementById("nextBtn").disabled = currentPage === tp;
+      document.getElementById("lastBtn").disabled = currentPage === tp;
+    }
+
+    document.getElementById("firstBtn").onclick = () => { currentPage = 1; renderPage(); };
+    document.getElementById("prevBtn").onclick = () => { if (currentPage > 1) { currentPage--; renderPage(); } };
+    document.getElementById("nextBtn").onclick = () => { if (currentPage < totalPages()) { currentPage++; renderPage(); } };
+    document.getElementById("lastBtn").onclick = () => { currentPage = totalPages(); renderPage(); };
+
+    let sortState = { col: -1, dir: 1 };
+    function sortBy(colIndex) {
+      if (sortState.col === colIndex) sortState.dir *= -1;
+      else { sortState.col = colIndex; sortState.dir = 1; }
+      const col = columns[colIndex];
+      const numeric = allRows.length > 0 && isNumeric(allRows[0][col]);
+      allRows.sort((a, b) => {
+        let av = a[col], bv = b[col];
+        if (numeric) { av = parseFloat(av) || 0; bv = parseFloat(bv) || 0; }
+        else { av = (av || "").toString(); bv = (bv || "").toString(); }
+        if (av < bv) return -1 * sortState.dir;
+        if (av > bv) return 1 * sortState.dir;
+        return 0;
+      });
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const q = document.getElementById("search").value.toLowerCase();
+      const status = document.getElementById("statusFilter").value;
+      filteredRows = allRows.filter((r) => {
+        const matchStatus = !status || r.status === status;
+        const matchSearch =
+          !q ||
+          columns.some((c) => String(r[c] || "").toLowerCase().includes(q));
+        return matchStatus && matchSearch;
+      });
+      currentPage = 1;
+      renderPage();
+    }
+
+    function populateStatusFilter() {
+      const sel = document.getElementById("statusFilter");
+      const statuses = [...new Set(allRows.map((r) => r.status).filter(Boolean))].sort();
+      statuses.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        sel.appendChild(opt);
+      });
+    }
+
+    document.getElementById("search").addEventListener("input", applyFilters);
+    document.getElementById("statusFilter").addEventListener("change", applyFilters);
+
+    document.getElementById("loading").textContent = "Loading " + CSV_URL + " …";
+
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function (results) {
+        allRows = results.data;
+        columns = results.meta.fields || [];
+        document.getElementById("loading").style.display = "none";
+        renderHeader();
+        populateStatusFilter();
+        filteredRows = allRows;
+        currentPage = 1;
+        renderPage();
+      },
+      error: function (err) {
+        document.getElementById("loading").textContent =
+          "Failed to load CSV: " + err.message +
+          " (serve this folder over HTTP, e.g. 'npx serve', since file:// blocks fetch).";
+      },
+    });
+
+    // ---- D3 visualization of nickname categories (combined) ----
+    const PALETTE = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+      "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16", "#e11d48", "#0ea5e9"];
+
+    function hexToRgba(hex, a) {
+      const h = hex.replace("#", "");
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+
+    function drawCombinedViz(sel, groups) {
+      const container = d3.select(sel);
+      container
+        .insert("div", ":first-child")
+        .attr("class", "text-2xl font-bold text-slate-900 mb-3 text-center")
+        .text("AI-assisted Categorization of UFC Athlete Nicknames");
+
+      const allItems = groups
+        .flatMap((g) => Object.entries(g.items))
+        .sort((a, b) => b[1].count - a[1].count);
+      const max = Math.max(...allItems.map((e) => e[1].count));
+
+      let colorIdx = 0;
+
+      allItems.forEach(([key, val]) => {
+        const color = PALETTE[colorIdx % PALETTE.length];
+        colorIdx++;
+        const pct = ((val.count / max) * 100).toFixed(1);
+        const tint = hexToRgba(color, 0.15);
+
+        const card = container
+          .append("div")
+          .attr("class", "mb-3 flex gap-2 items-start");
+
+        const labelCol = card
+          .append("div")
+          .attr("class", "w-32 shrink-0 pt-1 text-right");
+        labelCol
+          .append("div")
+          .attr("class", "text-sm font-semibold text-slate-800")
+          .text(key.charAt(0).toUpperCase() + key.slice(1));
+        labelCol
+          .append("div")
+          .attr("class", "text-xs text-slate-500")
+          .text("(" + val.count + ")");
+
+        // proportional bar as the background behind the pills
+        const bar = card
+          .append("div")
+          .attr("class", "flex-1 rounded-lg flex flex-wrap gap-1.5 p-2 min-h-[2.25rem]")
+          .style(
+            "background",
+            `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, ${tint} ${pct}%, ${tint} 100%)`
+          );
+
+        (val.examples || []).slice(0, 20).forEach((name) => {
+          bar
+            .append("span")
+            .attr(
+              "class",
+              "px-2 py-0.5 rounded-full bg-white/75 text-slate-800 text-[11px] font-medium"
+            )
+            .text(name);
+        });
+      });
+    }
+
+    const VIZ_DATA = {"main":{"animal":{"count":104,"examples":["White Bear","The Lion","The Beast","Tajik Eagle","Big Dog","Pitbull","Animal","The Pit Bull","Red Fox","The Raging Bull","Beastboy","The Snow Leopard","El Animal","The Bama Beast","The Monkey God","The Bear","Bulldog","The Bull","Beast Master","Barracuda"]},"place":{"count":63,"examples":["Pride of Palestine","The Mongolian Knight","Russian Ronda","The Mongolian Murderer","The Texas Kid","The Canadian Gangster","Polish Pistola","The Korean Cowboy","New York Bad Ass","American Psycho","The Fighting Texas Aggie","The Colombian Warrior","The Korean Superboy","The Korean Bulldozer","Detroit Superstar","Gaucho","The Irish Hand Grenade","The Cuban Problem","The Crazy Cuban","Irish"]},"object":{"count":68,"examples":["The Hammer","8th Wonder","AK-47","Bullet","The Gun","Iron","The Rock n Rolla","The Cannon","Cast Iron","ABC","BDK","Blade","The Iron Lady","The Freight Train","The Anvil","24K","J-Train","Nite Train","Truck","Freight Train"]}},"sub":{"title":{"count":52,"examples":["The Prince","Prince","El Charro","The Underground King","Captain Chaos","El Caballero","Captain Morocco","The Sultan","The Baron","The Queen of Spades","The Warrior Princess","The Boss","The Sergeant","The King","King","The Queen","Don't Blink","Duke","Princess","KO King"]},"occupation":{"count":115,"examples":["The Assassin","The Turan Warrior","The Sniper","The Butcher","The South Side Strangler","The Westside Strangler","Hitman","The Headhunter","The Baltic Gladiator","The People's Warrior","The Eastside Assassin","The Cannibal","Ninja","Cowboy","The Last Pirate","The Bandit","The Soldier","The Natural Born Killer","The Silent Assassin","Killer B"]},"mythical":{"count":72,"examples":["The Kraken","Angel of Death","Wolverine","El Fenomeno","The Terminator","The Monster","Goku","Darth","Holy War Angel","Monster","The Tazmexican Devil","Skywalker","The Mindless Hulk","Zombie Girl","Robot","The Jersey Devil","Lil' Hulk","Tarzan","Godzilla","The Joker"]},"nature":{"count":34,"examples":["The Hurricane","Caramel Thunder","Hurricane","The Blaze","The Fire","Kid Lightning","Astro Girl","Galaxy","Twilight","Storm","Fire Kid","The Perfect Storm","The Storm","The Fireball Kid","The Inferno","Fireball","Firefist","Thunder","The Monsoon","The Tornado"]},"appearance":{"count":55,"examples":["Baby","Golden Boy","The Black Samourai","Mini","Baby Face","Red Nose","Hairy","Blonde Fighter","The Pink Pounder","Pretty Boy","Big Frog","The Big Boy","Babyface","Big Rig","White Kong","The Big Ticket","Smooth","Black Country Banger","Short Fuse","Hot Handed"]},"food":{"count":23,"examples":["Too Sweet","Morango","Feijao","Glorinha","Suga","Cacareco","Sweet Dreams","Miojo","Wasabi","Meatball","Cheesecake","Cheesesteak","Mango","Toddynho","Sugar","Pepsi","Cap'n Crunch","Taco","The Meat Cleaver","Coconut Bombz"]},"abstract":{"count":29,"examples":["The Natural","Almighty","All In","Smile'N","The Real Deal","The Truth","Chaos","The Dream","The Answer","The Gift","The Real One","Blessed","The Saint","Mr. Perfect","Magic Man","The One","Street Buddha","The Promise","Magic","The Miracle"]},"trait":{"count":78,"examples":["Slick","No Regard","Funky","Ferocious","Brutal","Psycho","The Menace","Bad","Cold Blooded","No Mercy","Relentless","Ill Will","Badys","Young Savage","The Insane","The Mad Titan","The Psycho","No Love","C-Murder","Havoc"]},"code":{"count":31,"examples":["Mr. 200%","LeftHand2God","HD","DB","The 1","DC","KGD","CJ","CLD","CC0 (C-C-OH)","AJ","GT","JG","KLB","JBC","TK","MAK","KGB","The Nsane1","GM3"]}}};
+    const vizData = VIZ_DATA;
+    drawCombinedViz("#viz", [
+      { name: "Main categories", items: vizData.main },
+      { name: "", items: vizData.sub },
+    ]);
+
+    function escXml(t) {
+      return String(t)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function textWidth(t) {
+      if (typeof document !== "undefined") {
+        const cv =
+          textWidth._cv || (textWidth._cv = document.createElement("canvas"));
+        const ctx = cv.getContext("2d");
+        ctx.font = "11px sans-serif";
+        return ctx.measureText(t).width;
+      }
+      let total = 0;
+      for (const ch of t) {
+        let cw;
+        if (ch === " ") cw = 3;
+        else if (ch >= "a" && ch <= "z") {
+          if ("iltfjr".includes(ch)) cw = 3;
+          else if (ch === "m" || ch === "w") cw = 8;
+          else cw = 5.5;
+        } else if (ch >= "A" && ch <= "Z") {
+          if (ch === "I") cw = 4;
+          else if (ch === "W" || ch === "M") cw = 8.5;
+          else cw = 7;
+        } else if (ch >= "0" && ch <= "9") cw = 6;
+        else if (".:,;'-!".includes(ch)) cw = 3;
+        else cw = 5.5;
+        total += cw;
+      }
+      return total;
+    }
+
+    function buildSvg(data) {
+      const groups = [{ items: data.main }, { items: data.sub }];
+      const all = groups
+        .flatMap((g) => Object.entries(g.items))
+        .sort((a, b) => b[1].count - a[1].count);
+      const max = Math.max(...all.map((e) => e[1].count));
+
+      const W = 1160;
+      const labelW = 160;
+      const barX = labelW + 20;
+      const innerW = W - barX - 20;
+      const barH = 40;
+      const rowGap = 18;
+      const padTop = 10;
+      const padBot = 10;
+      const lineH = 18;
+      const titleH = 36;
+      const title = "AI-assisted Categorization of UFC Athlete Nicknames";
+
+      const pillLines = (examples) => {
+        let cx = barX + 8;
+        let lines = 1;
+        (examples || []).slice(0, 20).forEach((nm) => {
+          const w = nm.length * 6.4 + 14;
+          if (cx + w > barX + innerW - 4) {
+            cx = barX + 8;
+            lines++;
+          }
+          cx += w + 6;
+        });
+        return lines;
+      };
+
+      const heights = all.map(([, val]) => {
+        const lines = pillLines(val.examples);
+        const contentH = Math.max(barH, (lines - 1) * lineH + 34);
+        return contentH + rowGap;
+      });
+      const H = padTop + titleH + padBot + heights.reduce((a, b) => a + b, 0);
+
+      let s =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-width:760px;font-family:sans-serif">`;
+      s += `<rect width="${W}" height="${H}" fill="white"/>`;
+
+      s += `<text x="${W / 2}" y="${padTop + 24}" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#0f172a">${escXml(title)}</text>`;
+
+      let y = padTop + titleH;
+      let ci = 0;
+      all.forEach(([key, val], i) => {
+        const color = PALETTE[ci++ % PALETTE.length];
+        const pct = ((val.count / max) * 100).toFixed(1);
+        const name = key.charAt(0).toUpperCase() + key.slice(1);
+        const lines = pillLines(val.examples);
+        const contentH = Math.max(barH, (lines - 1) * lineH + 34);
+        const blockH = (lines - 1) * lineH + 16;
+
+        s += `<text x="${labelW}" y="${y + contentH / 2 - 3}" text-anchor="end" font-family="sans-serif" font-size="13" font-weight="600" fill="#0f172a">${escXml(name)}</text>`;
+        s += `<text x="${labelW}" y="${y + contentH / 2 + 13}" text-anchor="end" font-family="sans-serif" font-size="11" fill="#64748b">(${val.count})</text>`;
+
+        const gid = "barGrad" + i;
+        s += `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="0">` +
+          `<stop offset="0%" stop-color="${color}" stop-opacity="1"/>` +
+          `<stop offset="${pct}%" stop-color="${color}" stop-opacity="1"/>` +
+          `<stop offset="${pct}%" stop-color="${color}" stop-opacity="0.15"/>` +
+          `<stop offset="100%" stop-color="${color}" stop-opacity="0.15"/>` +
+          `</linearGradient></defs>`;
+        s += `<rect x="${barX}" y="${y}" width="${innerW}" height="${contentH}" rx="6" fill="url(#${gid})"/>`;
+
+        let cx = barX + 8;
+        let cy = y + (contentH - blockH) / 2;
+        (val.examples || []).slice(0, 20).forEach((raw) => {
+          const nm = raw.trim();
+          const w = textWidth(nm) + 22;
+          if (cx + w > barX + innerW - 4) {
+            cx = barX + 8;
+            cy += lineH;
+          }
+          s += `<rect x="${cx}" y="${cy}" width="${w}" height="16" rx="8" fill="#ffffff" fill-opacity="0.75"/>`;
+          s += `<text x="${cx + 8}" y="${cy + 12}" font-family="sans-serif" font-size="11" fill="#0f172a">${escXml(nm)}</text>`;
+          cx += w + 6;
+        });
+
+        y += heights[i];
+      });
+
+      s += `</svg>`;
+      return s;
+    }
+
+    document.getElementById("downloadSvg").addEventListener("click", () => {
+      if (!vizData) {
+        alert("Data is still loading…");
+        return;
+      }
+      const svg = buildSvg(vizData);
+      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "nickname_categories.svg";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    });
+  </script>
+</body>
+</html>
