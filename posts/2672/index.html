@@ -1,0 +1,579 @@
+---
+title: Many penguins - AVONET dataset
+author: Manish Datt
+date: '2026-07-14'
+description: Average wing length across penguin species.
+image: penguins_wing.png
+categories:
+- D3js
+- TidyTuesday
+layout: false
+slug: 2672
+---
+
+<h2 class="text-2xl lg:text-3xl m-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Many Penguins</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.5/dist/css/tabulator.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.5/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <style>
+    .dual-range {
+      position: absolute;
+      left: 0;
+      right: 0;
+      width: 100%;
+      margin: 0;
+      height: 1.25rem;
+      background: none;
+      pointer-events: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .dual-range::-webkit-slider-runnable-track { background: transparent; }
+    .dual-range::-moz-range-track { background: transparent; }
+    .dual-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      pointer-events: auto;
+      height: 14px;
+      width: 14px;
+      border-radius: 9999px;
+      background: #fff;
+      border: 2px solid #0284c7;
+      cursor: pointer;
+      margin-top: -5px;
+    }
+    .dual-range::-moz-range-thumb {
+      pointer-events: auto;
+      height: 14px;
+      width: 14px;
+      border-radius: 9999px;
+      background: #fff;
+      border: 2px solid #0284c7;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-2">Many Penguins</h1>
+    <p class="text-slate-500 mb-6">Data loaded from <code class="bg-slate-100 px-1 py-0.5 rounded">many_penguins.csv</code>.</p>
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <div id="penguin-table"></div>
+    </div>
+    <div class="mt-8 bg-white shadow rounded-lg p-4">
+      <h2 class="text-lg font-semibold mb-1">Average wing length by species and sex</h2>
+      <p class="text-sm text-slate-500 mb-2">Grouped bars show mean for females and males; error bars show &plusmn;1 standard deviation.</p>
+      <div id="wing-chart"></div>
+    </div>
+    <div class="mt-8 bg-white shadow rounded-lg p-4">
+      <h2 class="text-2xl font-semibold mb-1">Penguins species colored by average wing length for <span class="text-sky-500">Males</span> and <span class="text-rose-500">Females</span></h2>
+      <p class="text-sm text-slate-500 mb-4">
+        Each penguin is split down the middle: left half = males, right half = females.
+        Fill height (0&ndash;200&nbsp;mm scale) shows the mean (darker) and &plusmn;1&nbsp;SD (lighter).
+        The rest is grey. Layout is 6 columns &times; 2 rows (12 species with male data;
+        female half shown in grey where female data is missing; male-only species at the bottom row).
+      </p>
+      <div id="penguin-grid" class="grid" style="display:grid; grid-template-columns:repeat(6,1fr); gap:1rem;"></div>
+      <div class="mt-3 flex gap-2">
+        <button id="download-svg-btn" class="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-600">Download SVG</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sanitize = (s) => s.replace(/[^a-zA-Z0-9_]/g, "_");
+
+    function isNumericColumn(values) {
+      const present = values.filter((v) => v !== null && v !== undefined);
+      if (present.length === 0) return false;
+      return present.every((v) => typeof v === "number" && !isNaN(v));
+    }
+
+    let numericRanges = {};
+
+    function buildRangeFilter(column) {
+      const range = numericRanges[column.getField()];
+      const span = range.max - range.min || 1;
+      const pct = (v) => ((v - range.min) / span) * 100;
+
+      const wrap = document.createElement("div");
+      wrap.className = "flex flex-col gap-1 px-1 py-1";
+
+      const label = document.createElement("span");
+      label.className = "text-[10px] leading-tight text-slate-500 whitespace-nowrap";
+      label.textContent = range.min.toFixed(1) + " – " + range.max.toFixed(1);
+
+      const slider = document.createElement("div");
+      slider.className = "relative h-5";
+
+      const track = document.createElement("div");
+      track.className = "absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 rounded bg-slate-200";
+
+      const fill = document.createElement("div");
+      fill.className = "absolute top-1/2 -translate-y-1/2 h-1 rounded bg-sky-500";
+
+      const lo = document.createElement("input");
+      lo.type = "range";
+      lo.min = range.min;
+      lo.max = range.max;
+      lo.step = 0.1;
+      lo.value = range.min;
+      lo.className = "dual-range";
+
+      const hi = document.createElement("input");
+      hi.type = "range";
+      hi.min = range.min;
+      hi.max = range.max;
+      hi.step = 0.1;
+      hi.value = range.max;
+      hi.className = "dual-range";
+
+      function update() {
+        let a = parseFloat(lo.value);
+        let b = parseFloat(hi.value);
+        if (a > b) {
+          const t = a;
+          a = b;
+          b = t;
+        }
+        fill.style.left = pct(a) + "%";
+        fill.style.right = 100 - pct(b) + "%";
+        label.textContent = a.toFixed(1) + " – " + b.toFixed(1);
+        const f = column.getField();
+        if (a <= range.min && b >= range.max) {
+          delete numericRangeFilters[f];
+        } else {
+          numericRangeFilters[f] = { min: a, max: b };
+        }
+        if (table) table.setFilter(combinedNumericFilter);
+      }
+      lo.addEventListener("input", update);
+      hi.addEventListener("input", update);
+
+      slider.appendChild(track);
+      slider.appendChild(fill);
+      slider.appendChild(lo);
+      slider.appendChild(hi);
+
+      wrap.appendChild(label);
+      wrap.appendChild(slider);
+      return wrap;
+    }
+
+    const naFormatter = function (cell) {
+      const v = cell.getValue();
+      return v === null || v === undefined ? "NA" : v;
+    };
+
+    let table = null;
+    const numericRangeFilters = {};
+
+    function combinedNumericFilter(row) {
+      for (const f in numericRangeFilters) {
+        const r = numericRangeFilters[f];
+        const v = row[f];
+        if (v === null || v === undefined) return false;
+        if (v < r.min || v > r.max) return false;
+      }
+      return true;
+    }
+
+    const SEXES = ["F", "M", "U"];
+    const SEX_COLOR = { F: "#ec4899", M: "#0ea5e9", U: "#94a3b8" };
+    const SEX_LABEL = { F: "Female", M: "Male", U: "Unknown" };
+
+    function wingStats(rows) {
+      const stats = [];
+      d3.group(rows, (d) => d.species).forEach(function (values, species) {
+        SEXES.forEach(function (sex) {
+          const vals = values
+            .filter((r) => r.sex === sex)
+            .map((r) => r.wing_length)
+            .filter((v) => v !== null && v !== undefined && !isNaN(v));
+          if (!vals.length) return;
+          stats.push({
+            species: species,
+            sex: sex,
+            mean: d3.mean(vals),
+            std: d3.deviation(vals) || 0,
+            n: vals.length,
+          });
+        });
+      });
+      return stats;
+    }
+
+    function drawWingChart(stats) {
+      const container = d3.select("#wing-chart");
+      container.selectAll("*").remove();
+      if (!stats.length) return;
+
+      const lookup = {};
+      stats.forEach((d) => (lookup[d.species + "|" + d.sex] = d));
+
+      const speciesMean = {};
+      stats.forEach((d) => (speciesMean[d.species] = (speciesMean[d.species] || 0) + d.mean));
+      const species = Object.keys(speciesMean).sort(
+        (a, b) => d3.descending(speciesMean[a], speciesMean[b])
+      );
+
+      const margin = { top: 30, right: 20, bottom: 80, left: 60 };
+      const width =
+        Math.max(320, container.node().clientWidth) - margin.left - margin.right;
+      const height = 360 - margin.top - margin.bottom;
+
+      const svg = container
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      const x0 = d3
+        .scaleBand()
+        .domain(species)
+        .range([0, width])
+        .paddingInner(0.2);
+
+      const x1 = d3
+        .scaleBand()
+        .domain(SEXES)
+        .range([0, x0.bandwidth()])
+        .padding(0.05);
+
+      const maxY = d3.max(stats, (d) => d.mean + d.std) || 1;
+      const y = d3
+        .scaleLinear()
+        .domain([0, maxY * 1.1])
+        .range([height, 0])
+        .nice();
+
+      svg
+        .append("g")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(x0))
+        .selectAll("text")
+        .attr("transform", "rotate(-25)")
+        .style("text-anchor", "end");
+
+      svg.append("g").call(d3.axisLeft(y));
+
+      svg
+        .append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", -margin.left + 15)
+        .attr("x", -height / 2)
+        .attr("text-anchor", "middle")
+        .attr("class", "fill-slate-600 text-sm")
+        .text("Wing length (mm)");
+
+      species.forEach(function (s) {
+        SEXES.forEach(function (sex) {
+          const d = lookup[s + "|" + sex];
+          if (!d) return;
+          const bx = x0(s) + x1(sex);
+          const bw = x1.bandwidth();
+          const cx = bx + bw / 2;
+
+          svg
+            .append("rect")
+            .attr("x", bx)
+            .attr("y", y(d.mean))
+            .attr("width", bw)
+            .attr("height", height - y(d.mean))
+            .attr("fill", SEX_COLOR[sex]);
+
+          svg
+            .append("line")
+            .attr("x1", cx)
+            .attr("x2", cx)
+            .attr("y1", y(d.mean - d.std))
+            .attr("y2", y(d.mean + d.std))
+            .attr("stroke", "#334155")
+            .attr("stroke-width", 1.5);
+
+          svg
+            .append("line")
+            .attr("x1", cx - 6)
+            .attr("x2", cx + 6)
+            .attr("y1", y(d.mean - d.std))
+            .attr("y2", y(d.mean - d.std))
+            .attr("stroke", "#334155")
+            .attr("stroke-width", 1.5);
+
+          svg
+            .append("line")
+            .attr("x1", cx - 6)
+            .attr("x2", cx + 6)
+            .attr("y1", y(d.mean + d.std))
+            .attr("y2", y(d.mean + d.std))
+            .attr("stroke", "#334155")
+            .attr("stroke-width", 1.5);
+        });
+      });
+
+      const legend = svg
+        .append("g")
+        .attr("transform", "translate(0," + (margin.top - 18) + ")");
+      SEXES.forEach(function (sex, i) {
+        const item = legend
+          .append("g")
+          .attr("transform", "translate(" + i * 80 + ",0)");
+        item
+          .append("rect")
+          .attr("width", 12)
+          .attr("height", 12)
+          .attr("y", -10)
+          .attr("fill", SEX_COLOR[sex]);
+        item
+          .append("text")
+          .attr("x", 16)
+          .attr("y", 0)
+          .attr("class", "fill-slate-600 text-xs")
+          .text(SEX_LABEL[sex]);
+      });
+    }
+
+    let penguinInner = null;
+
+    function penguinStats(rows) {
+      const out = [];
+      d3.group(rows, (d) => d.species).forEach(function (vals, species) {
+        const m = vals
+          .filter((r) => r.sex === "M")
+          .map((r) => r.wing_length)
+          .filter((v) => v !== null && v !== undefined && !isNaN(v));
+        if (!m.length) return;
+        const f = vals
+          .filter((r) => r.sex === "F")
+          .map((r) => r.wing_length)
+          .filter((v) => v !== null && v !== undefined && !isNaN(v));
+        const maleMean = d3.mean(m);
+        const femaleMean = f.length ? d3.mean(f) : null;
+        out.push({
+          species: species,
+          short: vals[0].shortname,
+          male: { mean: maleMean, std: d3.deviation(m) || 0, n: m.length },
+          female: femaleMean !== null ? { mean: femaleMean, std: d3.deviation(f) || 0, n: f.length } : null,
+          avg: femaleMean !== null ? (maleMean + femaleMean) / 2 : maleMean,
+        });
+      });
+      out.sort((a, b) => d3.ascending(a.species, b.species));
+      return out;
+    }
+
+    function drawPenguinGrid(stats) {
+      const container = d3.select("#penguin-grid");
+      container.selectAll("*").remove();
+      if (!stats.length || !penguinInner) return;
+
+      const ordered = stats.slice().sort((a, b) => d3.descending(a.male.mean, b.male.mean));
+
+      const VH = 64;
+      const YMAX = 200;
+      const NA_FILL = "#e2e8f0";
+      const MALE_C = "#2563eb";
+      const MALE_L = "#93c5fd";
+      const FEMALE_C = "#db2777";
+      const FEMALE_L = "#f9a8d4";
+
+      const minAvg = d3.min(ordered, (d) => d.avg);
+      const maxAvg = d3.max(ordered, (d) => d.avg);
+      const avgSpan = maxAvg - minAvg || 1;
+
+      const cards = container
+        .selectAll("div.pcard")
+        .data(ordered)
+        .enter()
+        .append("div")
+        .attr("class", "pcard flex flex-col items-center");
+
+      cards.each(function (d, i) {
+        const hasF = !!d.female;
+        const sw = 80 + ((d.avg - minAvg) / avgSpan) * 80;
+
+        const mMeanH = Math.min(1, d.male.mean / YMAX) * VH;
+        const mTotalH = Math.min(1, (d.male.mean + d.male.std) / YMAX) * VH;
+        const mMeanY = VH - mMeanH;
+        const mSdY = VH - mTotalH;
+
+        const fMeanH = hasF ? Math.min(1, d.female.mean / YMAX) * VH : 0;
+        const fTotalH = hasF ? Math.min(1, (d.female.mean + d.female.std) / YMAX) * VH : 0;
+        const fMeanY = VH - fMeanH;
+        const fSdY = VH - fTotalH;
+
+        let svg =
+          '<svg viewBox="0 0 64 64" width="' + sw + '" height="120">' +
+          "<defs>" +
+          '<clipPath id="mM' + i + '"><rect x="0" y="' + mMeanY + '" width="32" height="' + mMeanH + '"/></clipPath>' +
+          '<clipPath id="mS' + i + '"><rect x="0" y="' + mSdY + '" width="32" height="' + (mMeanY - mSdY) + '"/></clipPath>' +
+          '<clipPath id="fM' + i + '"><rect x="32" y="' + fMeanY + '" width="32" height="' + fMeanH + '"/></clipPath>' +
+          '<clipPath id="fS' + i + '"><rect x="32" y="' + fSdY + '" width="32" height="' + (fMeanY - fSdY) + '"/></clipPath>' +
+          "</defs>";
+
+        svg += '<g fill="' + NA_FILL + '">' + penguinInner + '</g>';
+
+        svg +=
+          '<g clip-path="url(#mM' + i + ')"><g fill="' + MALE_C + '">' + penguinInner + '</g></g>' +
+          '<g clip-path="url(#mS' + i + ')"><g fill="' + MALE_L + '">' + penguinInner + '</g></g>' +
+          '<g clip-path="url(#fM' + i + ')"><g fill="' + (hasF ? FEMALE_C : NA_FILL) + '">' + penguinInner + '</g></g>' +
+          '<g clip-path="url(#fS' + i + ')"><g fill="' + (hasF ? FEMALE_L : NA_FILL) + '">' + penguinInner + '</g></g>';
+
+        svg +=
+          '</svg>';
+
+        const card = d3.select(this);
+        card.html(svg);
+        card
+          .append("div")
+          .attr("class", "text-xs font-medium italic mt-1 text-center")
+          .text(d.short);
+        const cap =
+          "M " +
+          d.male.mean.toFixed(1) +
+          " &plusmn; " +
+          d.male.std.toFixed(1) +
+          " (n=" + d.male.n + ")" +
+          (hasF
+            ? "<br>F " + d.female.mean.toFixed(1) + " &plusmn; " + d.female.std.toFixed(1) + " (n=" + d.female.n + ")"
+            : "<br>F NA");
+        card
+          .append("div")
+          .attr("class", "text-[10px] text-slate-500 text-center leading-tight")
+          .html(cap);
+      });
+    }
+
+    function downloadSVG() {
+      const cards = document.querySelectorAll('#penguin-grid .pcard');
+      if (!cards.length) return;
+      const cols = 6, gap = 16, lh = 50, thH = 56;
+      let mw = 0;
+      cards.forEach(c => { const w = parseInt(c.querySelector('svg').getAttribute('width')); mw = Math.max(mw, w); });
+      mw = Math.max(mw, 120);
+      const cw = mw + gap, rh = 120 + lh + gap;
+      const tw = cols * cw - gap, tr = Math.ceil(cards.length / cols), th = tr * rh - gap + thH;
+      let body = `<text x="${tw / 2}" y="24" font-family="sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="#1e293b">Penguins species colored by average wing length for <tspan fill="#2563eb">Males</tspan> and <tspan fill="#db2777">Females</tspan></text><text x="${tw / 2}" y="48" font-family="sans-serif" font-size="16" font-weight="400" text-anchor="middle" fill="#1e293b">Width proportional to average male wing length. Six species with unknown gender were excluded.</text>`;
+      cards.forEach((card, i) => {
+        const svg = card.querySelector('svg'), col = i % cols, row = Math.floor(i / cols);
+        const sw = parseInt(svg.getAttribute('width'));
+        const x = col * cw + (mw - sw) / 2, y = row * rh + thH;
+        let sm = new XMLSerializer().serializeToString(svg);
+        sm = sm.replace(/id="([^"]+)"/g, `id="c${i}_$1"`).replace(/url\(#([^)]+)\)/g, `url(#c${i}_$1)`);
+        body += `<g transform="translate(${x},${y})">${sm}`;
+        const nm = card.querySelector('.text-xs.font-medium');
+        if (nm) body += `<text x="${sw / 2}" y="132" font-family="sans-serif" font-size="12" font-weight="600" font-style="italic" text-anchor="middle" fill="#334155">${nm.textContent}</text>`;
+        const st = card.querySelector('[class*="text-\\[10px\\]"]');
+        if (st) {
+          const ln = st.innerHTML.split('<br>');
+          ln.forEach((l, li) => body += `<text x="${sw / 2}" y="${148 + li * 14}" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#64748b">${l.replace(/&plusmn;/g, '±').replace(/&nbsp;/g, ' ')}</text>`);
+        }
+        body += '</g>';
+      });
+      const doc = `<?xml version="1.0" encoding="utf-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${tw}" height="${th}"><rect width="${tw}" height="${th}" fill="#ffffff"/>${body}\n</svg>`;
+      const blob = new Blob([doc], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'penguins.svg';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    Papa.parse("many_penguins.csv", {
+      download: true,
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      complete: function (results) {
+        const fields = results.meta.fields;
+
+        const data = results.data.map(function (row) {
+          const out = {};
+          fields.forEach(function (field) {
+            let v = row[field];
+            if (v === "NA") v = null;
+            out[sanitize(field)] = v;
+          });
+          return out;
+        });
+
+        const categorical = {};
+
+        fields.forEach(function (field) {
+          const sf = sanitize(field);
+          const values = data.map((r) => r[sf]);
+          if (isNumericColumn(values)) {
+            const nums = values.filter((v) => typeof v === "number" && !isNaN(v));
+            numericRanges[sf] = { min: Math.min(...nums), max: Math.max(...nums) };
+          } else {
+            categorical[sf] = Array.from(
+              new Set(values.filter((v) => v !== null && v !== undefined).map(String))
+            ).sort();
+          }
+        });
+
+        const columns = fields.map(function (field) {
+          const sf = sanitize(field);
+          const base = { title: field, field: sf, formatter: naFormatter };
+          if (numericRanges[sf]) {
+            base.headerFilter = buildRangeFilter;
+            base.headerFilterFunc = function () { return true; };
+          } else {
+            base.headerFilter = "list";
+            base.headerFilterParams = { values: categorical[sf] };
+          }
+          return base;
+        });
+
+        table = new Tabulator("#penguin-table", {
+          data: data,
+          layout: "fitColumns",
+          responsiveLayout: "collapse",
+          movableColumns: true,
+          pagination: "local",
+          paginationSize: 10,
+          paginationSizeSelector: [10, 15, 25, 50],
+          initialSort: [{ column: "species", dir: "asc" }],
+          columns: columns,
+        });
+
+        table.on("tableBuilt", function () {
+          drawWingChart(wingStats(data));
+          const drawPenguins = function () {
+            drawPenguinGrid(penguinStats(data));
+          };
+          if (penguinInner === null) {
+            d3.text("penguin-svgrepo-com.svg").then(function (txt) {
+              penguinInner = txt
+                .substring(txt.indexOf("<svg"), txt.lastIndexOf("</svg>") + 6)
+                .replace(/<svg[^>]*>/, "")
+                .replace(/<\/svg>/, "")
+                .replace(/fill="[^"]*"/g, "");
+              drawPenguins();
+            });
+          } else {
+            drawPenguins();
+          }
+        });
+        table.on("dataFiltered", function (filters, rows) {
+          drawWingChart(wingStats(rows.map((r) => r.getData())));
+        });
+      },
+      error: function (err) {
+        document.getElementById("penguin-table").innerHTML =
+          '<p class="p-4 text-red-600">Could not load many_penguins.csv. ' +
+          "If you opened this file directly, serve it over HTTP instead " +
+          '(e.g. <code>npx serve</code> or the 11ty dev server).</p>';
+        console.error(err);
+      },
+    });
+    document.getElementById('download-svg-btn').addEventListener('click', downloadSVG);
+  </script>
+</body>
+</html>
