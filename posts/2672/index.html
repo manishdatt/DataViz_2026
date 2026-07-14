@@ -460,7 +460,7 @@ slug: 2672
       mw = Math.max(mw, 120);
       const cw = mw + gap, rh = 120 + lh + gap;
       const tw = cols * cw - gap, tr = Math.ceil(cards.length / cols), th = tr * rh - gap + thH;
-      let body = `<text x="${tw / 2}" y="24" font-family="sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="#1e293b">Penguins species colored by average wing length for <tspan fill="#2563eb">Males</tspan> and <tspan fill="#db2777">Females</tspan></text><text x="${tw / 2}" y="48" font-family="sans-serif" font-size="16" font-weight="400" text-anchor="middle" fill="#1e293b">Width proportional to average male wing length. Six species with unknown gender were excluded.</text>`;
+      let body = `<text x="${tw / 2}" y="24" font-family="sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="#1e293b">Average wing length for <tspan fill="#2563eb">Males</tspan> and <tspan fill="#db2777">Females</tspan> across penguin species</text><text x="${tw / 2}" y="48" font-family="sans-serif" font-size="16" font-weight="400" text-anchor="middle" fill="#1e293b">Width proportional to average male wing length. Six species of unknown sex were excluded.</text>`;
       cards.forEach((card, i) => {
         const svg = card.querySelector('svg'), col = i % cols, row = Math.floor(i / cols);
         const sw = parseInt(svg.getAttribute('width'));
