@@ -1,0 +1,359 @@
+---
+title: Ecotourism
+author: Manish Datt
+date: '2026-07-28'
+description: Human observation of species on weekdays.
+image: Ecotourism.png
+categories:
+- D3js
+- TidyTuesday
+layout: false
+slug: 2674
+---
+
+<h2 class="text-2xl lg:text-3xl m-4">TidyTuesday dataset of <a
+        href="https://github.com/rfordatascience/tidytuesday/blob/main/data/2026/{{ date }}">{{ date }}</a></h2>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Tables</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="danfo-bundle.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-7xl mx-auto">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Data Tables</h1>
+    <div class="flex items-center gap-2 mb-4">
+      <label class="text-sm font-medium text-gray-700">Dataset:</label>
+      <select id="dataset-select" class="border border-gray-300 rounded-md px-2 py-1.5 text-sm">
+        <option value="occurrences.csv">Occurrences</option>
+        <option value="tourism.csv">Tourism</option>
+        <option value="weather.csv">Weather</option>
+      </select>
+      <button id="download-bar-donut" class="px-2 py-1 text-xs bg-gray-700 text-white rounded hover:bg-gray-800">Download SVG</button>
+    </div>
+    <div id="unique-sci-name" class="mb-4 text-sm text-gray-700 hidden"></div>
+    <div id="timeline-controls" class="bg-white rounded-lg shadow p-4 mb-4">
+      <label class="text-sm text-gray-700 mr-2">Top <span id="top-n-value">10</span> species:</label>
+      <input type="range" id="top-n-slider" min="1" max="10" value="10">
+    </div>
+    <div id="timeline-chart" class="bg-white rounded-lg shadow p-4 mb-4"></div>
+    <div id="occurrence-bar-chart" class="rounded-lg shadow p-4 mb-4 relative" style="background:#000080;"></div>
+    <div id="tourism-chart" class="bg-white rounded-lg shadow p-4 mb-4"></div>
+    <div id="tourism-summary" class="bg-white rounded-lg shadow p-4 mb-4">
+      <div class="flex flex-wrap items-start gap-4">
+        <div id="tourism-bar-chart" class="flex-1 min-w-[320px]"></div>
+        <div id="tourism-donut" class="w-80 shrink-0"></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr id="header-row"></tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200" id="table-body"></tbody>
+        </table>
+      </div>
+      <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+        <span class="text-sm text-gray-700" id="page-info"></span>
+        <div class="flex gap-2">
+          <button id="prev-btn" class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+          <button id="next-btn" class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const PAGE_SIZE = 10;
+    let allData = [];
+    let headers = [];
+    let currentPage = 1;
+    let currentCsv = 'occurrences.csv';
+
+    function renderTable() {
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = start + PAGE_SIZE;
+      const pageData = allData.slice(start, end);
+
+      const headerRow = document.getElementById('header-row');
+      headerRow.innerHTML = '';
+      headers.forEach(h => {
+        const th = document.createElement('th');
+        th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+        th.textContent = h;
+        headerRow.appendChild(th);
+      });
+
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+      pageData.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        headers.forEach(h => {
+          const td = document.createElement('td');
+          td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+          td.textContent = row[h] !== undefined ? row[h] : '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      const totalPages = Math.ceil(allData.length / PAGE_SIZE);
+      document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages} (${allData.length} records)`;
+      document.getElementById('prev-btn').disabled = currentPage === 1;
+      document.getElementById('next-btn').disabled = currentPage === totalPages;
+    }
+
+    function getTopNSpecies(data, n) {
+      const counts = new Map();
+      data.forEach(d => {
+        if (d.sci_name) counts.set(d.sci_name, (counts.get(d.sci_name) || 0) + 1);
+      });
+      return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, n).map(e => e[0]);
+    }
+
+    function renderTimeline(data, topN) {
+      const container = document.getElementById('timeline-chart');
+      container.innerHTML = '';
+
+      const topSpecies = getTopNSpecies(data, topN);
+      const filtered = data.filter(d => topSpecies.includes(d.sci_name) && d.date);
+      const counts = d3.group(filtered, d => d.date, d => d.sci_name);
+      const dates = Array.from(new Set(filtered.map(d => d.date))).sort();
+
+      const margin = {top: 50, right: 170, bottom: 50, left: 180};
+      const width = Math.max(760, container.clientWidth - margin.left - margin.right - 32);
+      const height = 400 - margin.top - margin.bottom;
+
+      const svg = d3.select('#timeline-chart').append('svg').attr('width', width + margin.left + margin.right).attr('height', height + margin.top + margin.bottom).append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+      const x = d3.scaleTime().domain(d3.extent(dates.map(d => new Date(d)))).range([0, width]);
+      const allCounts = dates.flatMap(date => topSpecies.map(s => counts.get(date)?.get(s)?.length || 0)).filter(c => c > 0);
+      const y = d3.scalePoint().domain(topSpecies).range([0, height]).padding(0.5);
+      const radius = d3.scaleSqrt().domain([0, d3.max(allCounts) || 1]).range([2.5, 16]);
+
+      svg.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).ticks(8).tickFormat(d3.timeFormat('%Y')));
+      d3.select(svg.node()).selectAll('.tick text').style('font-size', '14px');
+      svg.append('g').call(d3.axisLeft(y).tickSizeOuter(0));
+      d3.select(svg.node()).selectAll('.tick text').style('font-size', '14px');
+      svg.append('text').attr('x', width / 2).attr('y', height + 40).style('text-anchor', 'middle').style('font-size', '14px').text('Year');
+      svg.append('text').attr('transform', 'rotate(-90)').attr('x', -height / 2).attr('y', -155).style('text-anchor', 'middle').style('font-size', '14px').text('Species');
+
+      const color = d3.scaleOrdinal().domain(topSpecies).range(d3.schemeCategory10);
+      const points = dates.flatMap(date => topSpecies.map(species => ({
+        date: new Date(date),
+        species,
+        count: counts.get(date)?.get(species)?.length || 0
+      }))).filter(d => d.count > 0);
+      svg.append('g').selectAll('circle').data(points).join('circle')
+        .attr('cx', d => x(d.date))
+        .attr('cy', d => y(d.species))
+        .attr('r', d => radius(d.count))
+        .attr('fill', d => color(d.species))
+        .attr('opacity', 0.72)
+        .append('title')
+        .text(d => `${d.species}\n${d3.timeFormat('%Y-%m-%d')(d.date)}\n${d.count} occurrence${d.count === 1 ? '' : 's'}`);
+
+      const sizeLegend = svg.append('g').attr('transform', `translate(${width + 24}, ${Math.min(height - 120, topSpecies.length * 20 + 28)})`);
+      sizeLegend.append('text').attr('x', 0).attr('y', 0).style('font-size', '12px').style('font-weight', 'bold').text('Count');
+      const maxCount = d3.max(allCounts) || 1;
+      const sizeTicks = [0, 0.25, 0.5, 0.75, 1].map(p => Math.max(1, Math.round(1 + (maxCount - 1) * p)));
+      sizeTicks.forEach((count, i) => {
+        const yPos = 24 + i * 28;
+        sizeLegend.append('circle').attr('cx', 8).attr('cy', yPos).attr('r', radius(count)).attr('fill', '#9ca3af').attr('opacity', 0.45);
+        sizeLegend.append('text').attr('x', 32).attr('y', yPos + 4).style('font-size', '12px').text(d3.format(',')(count));
+      });
+
+      svg.append('text').attr('x', width / 2).attr('y', -28).style('text-anchor', 'middle').style('font-weight', 'bold').style('font-size', '16px').text(`Top ${topN} Species Occurrences by Date`);
+    }
+
+    function renderOccurrenceWeekdayBarChart(data) {
+      const container = document.getElementById('occurrence-bar-chart');
+      container.innerHTML = '';
+
+      const weekdayCounts = d3.rollup(data, v => v.length, d => d.weekday);
+      const orderedWeekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const barData = orderedWeekdays.map(day => ({weekday: day, count: weekdayCounts.get(day) || 0}));
+
+      const margin = {top: 50, right: 160, bottom: 40, left: 100};
+      const width = Math.max(400, container.clientWidth) - margin.left - margin.right;
+      const height = 300 - margin.top - margin.bottom;
+      const svgSelection = d3.select('#occurrence-bar-chart').append('svg').attr('width', width + margin.left + margin.right).attr('height', height + margin.top + margin.bottom);
+      svgSelection.attr('font-family', 'Arial, Helvetica, sans-serif').attr('font-size', '16px');
+      svgSelection.append('rect').attr('width', width + margin.left + margin.right).attr('height', height + margin.top + margin.bottom).attr('fill', '#000080').attr('rx', 8);
+      const svg = svgSelection.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+      svg.append('rect').attr('width', width).attr('height', height).attr('fill', '#000080').attr('rx', 4);
+      const barX = d3.scaleLinear().domain([0, d3.max(barData, d => d.count) || 1]).range([0, width]);
+      const barY = d3.scaleBand().domain(orderedWeekdays).range([0, height]).padding(0.3);
+      const barRadius = Math.max(0, Math.min(barY.bandwidth() / 2, 12));
+      const defs = svgSelection.append('defs');
+      const barGradient = defs.append('linearGradient').attr('id', 'bar-gradient').attr('x1', '0').attr('y1', '0').attr('x2', '1').attr('y2', '0');
+      barGradient.append('stop').attr('offset', '0%').attr('stop-color', '#1D4ED8');
+      barGradient.append('stop').attr('offset', '100%').attr('stop-color', '#1e90ff');
+      svg.append('g').attr('class', 'x-axis').attr('transform', `translate(0,${height})`).call(d3.axisBottom(barX).ticks(6).tickFormat(d => {
+        const value = +d;
+        if (value >= 1000) return (value / 1000) + 'K';
+        return value;
+      }).tickSizeOuter(0));
+      svg.selectAll('.x-axis .domain, .x-axis .tick line').remove();
+      svg.selectAll('.x-axis .tick text').style('font-size', '14px').style('fill', '#fff');
+      svg.selectAll('rect').data(barData).join('rect').attr('x', 0).attr('y', d => barY(d.weekday)).attr('width', d => barX(d.count)).attr('height', barY.bandwidth()).attr('rx', barRadius).attr('ry', barRadius).attr('fill', 'url(#bar-gradient)');
+      svg.selectAll('.bar-label').data(barData).join('text').attr('class', 'bar-label').attr('x', 8).attr('y', d => barY(d.weekday) + barY.bandwidth() / 2).attr('dy', '0.35em').style('font-size', '14px').style('fill', '#fff').style('pointer-events', 'none').text(d => d.weekday);
+      svg.append('text').attr('x', width / 2).attr('y', -24).style('text-anchor', 'middle').style('font-weight', 'bold').style('font-size', '16px').style('fill', '#fff').text('Number of organisms observed on weekdays by Humans in the Ecotourism data from 2014-2025.');
+      svg.append('text').attr('x', width / 2).attr('y', -6).style('text-anchor', 'middle').style('font-weight', 'bold').style('font-size', '16px').style('fill', '#fff').text('The donut shows the purpose of all overnight trips.');
+
+      fetch('tourism.csv')
+        .then(response => response.text())
+        .then(csvText => {
+          const result = Papa.parse(csvText, { header: true, dynamicTyping: false, skipEmptyLines: true });
+          const tourismData = result.data;
+          const totalTrips = d3.rollup(tourismData, v => d3.sum(v, d => +d.trips || 0), d => d.purpose);
+          const donutData = Array.from(totalTrips, ([purpose, trips]) => ({purpose, trips})).filter(d => d.trips > 0);
+          const donutSize = 110;
+          const donutX = width - 170;
+          const donutY = height - donutSize - 30;
+          const donutGroup = svg.append('g').attr('transform', `translate(${donutX},${donutY})`);
+          const midRadius = donutSize / 2;
+          const strokeWidth = 50;
+
+          const color = d3.scaleOrdinal()
+            .domain(donutData.map(d => d.purpose))
+            .range(['steelblue','skyblue']);
+          const pie = d3.pie()
+            .value(d => d.trips)
+            .sort(null)
+            .padAngle(0);
+
+          const arc = d3.arc()
+            .innerRadius(midRadius - strokeWidth / 2)
+            .outerRadius(midRadius)
+            .cornerRadius(0);
+
+          donutGroup.selectAll('path')
+            .data(pie(donutData))
+            .join('path')
+            .attr('d', arc)
+            .attr('fill', d => color(d.data.purpose))
+            .attr('stroke', 'none');
+
+          donutGroup.selectAll('text.label')
+            .data(pie(donutData))
+            .join('text')
+            .attr('class', 'label')
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', '#fff')
+            .style('font-size', '16px')
+            .style('font-weight', '500')
+            .attr('transform', d => {
+              const [x, y] = arc.centroid(d);
+              const angle = Math.atan2(y, x);
+              const labelRadius = midRadius + 24;
+              return `translate(${Math.cos(angle) * labelRadius}, ${Math.sin(angle) * labelRadius})`;
+            })
+            .each(function(d) {
+              const label = d3.select(this);
+              const lines = [`${d.data.purpose}`, `${(d.data.trips / 1000).toFixed(1)}M`];
+              label.text('');
+              lines.forEach((line, index) => {
+                label.append('tspan')
+                  .attr('x', 10)
+                  .attr('dy', index === 0 ? 0 : 18)
+                  .text(line);
+              });
+            });
+
+          donutGroup.append('circle')
+            .attr('r', midRadius - strokeWidth / 2)
+            .attr('fill', '#000080');
+
+        });
+    }
+
+    function fetchAndRenderCharts() {
+      fetch('occurrences.csv')
+        .then(response => response.text())
+        .then(csvText => {
+          const result = Papa.parse(csvText, { header: true, dynamicTyping: false, skipEmptyLines: true });
+          const data = result.data;
+          renderTimeline(data, 10);
+          renderOccurrenceWeekdayBarChart(data);
+          renderTourismSummary(data);
+        });
+    }
+
+    function renderTourismSummary(data) {
+      const container = document.getElementById('tourism-chart');
+      container.innerHTML = '';
+      const tourismData = data.filter(d => d.trip_type);
+      if (!tourismData.length) return;
+
+      const counts = d3.rollup(tourismData, v => v.length, d => d.trip_type);
+      const entries = Array.from(counts, ([type, count]) => ({type, count})).sort((a, b) => b.count - a.count);
+      const width = container.clientWidth || 700;
+      const height = 260;
+      const margin = {top: 20, right: 20, bottom: 40, left: 40};
+      const svg = d3.select('#tourism-chart').append('svg').attr('width', width).attr('height', height);
+      const x = d3.scaleBand().domain(entries.map(d => d.type)).range([margin.left, width - margin.right]).padding(0.2);
+      const y = d3.scaleLinear().domain([0, d3.max(entries, d => d.count) || 1]).nice().range([height - margin.bottom, margin.top]);
+      svg.append('g').attr('transform', `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x));
+      svg.append('g').attr('transform', `translate(${margin.left},0)`).call(d3.axisLeft(y));
+      svg.selectAll('rect').data(entries).join('rect').attr('x', d => x(d.type)).attr('y', d => y(d.count)).attr('width', x.bandwidth()).attr('height', d => height - margin.bottom - y(d.count)).attr('fill', '#3b82f6');
+      svg.append('text').attr('x', width / 2).attr('y', 16).attr('text-anchor', 'middle').style('font-size', '14px').style('font-weight', 'bold').text('Tourism Types');
+    }
+
+    function loadCsv(file) {
+      fetch(file)
+        .then(response => response.text())
+        .then(csvText => {
+          const result = Papa.parse(csvText, { header: true, dynamicTyping: false, skipEmptyLines: true });
+          allData = result.data;
+          headers = Object.keys(allData[0] || {});
+          currentPage = 1;
+          renderTable();
+          renderTimeline(allData, 10);
+          renderOccurrenceWeekdayBarChart(allData);
+          renderTourismSummary(allData);
+        });
+    }
+
+    document.getElementById('dataset-select').addEventListener('change', (event) => {
+      currentCsv = event.target.value;
+      loadCsv(currentCsv);
+    });
+
+    document.getElementById('prev-btn').addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        renderTable();
+      }
+    });
+
+    document.getElementById('next-btn').addEventListener('click', () => {
+      if (currentPage < Math.ceil(allData.length / PAGE_SIZE)) {
+        currentPage += 1;
+        renderTable();
+      }
+    });
+
+    document.getElementById('download-bar-donut').addEventListener('click', () => {
+      const svg = document.querySelector('#occurrence-bar-chart svg');
+      if (svg) {
+        const serializer = new XMLSerializer();
+        const source = serializer.serializeToString(svg);
+        const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = 'weekday-chart.svg';
+        downloadLink.click();
+      }
+    });
+
+    loadCsv(currentCsv);
+  </script>
+</body>
+</html>
