@@ -18,7 +18,7 @@ library(tidyverse)
 ```
 
 ``` r
-df_health <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-09-29/health.csv") ```
+df_health <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-09-29/health.csv")
 ```
 
 ``` r
